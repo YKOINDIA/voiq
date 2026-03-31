@@ -7,6 +7,7 @@ export type Question = {
   content: string;
   sender_name: string | null;
   is_anonymous: boolean;
+  answered_at: string | null;
   created_at: string;
 };
 

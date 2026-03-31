@@ -79,5 +79,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertResult.error.message }, { status: 500 });
   }
 
+  const questionUpdateResult = await admin
+    .from("questions")
+    .update({
+      answered_at: new Date().toISOString()
+    })
+    .eq("id", questionId)
+    .eq("recipient_id", profile.id);
+
+  if (questionUpdateResult.error) {
+    return NextResponse.json({ error: questionUpdateResult.error.message }, { status: 500 });
+  }
+
   return NextResponse.json({ success: true });
 }

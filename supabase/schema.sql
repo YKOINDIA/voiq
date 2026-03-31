@@ -19,8 +19,11 @@ create table if not exists public.questions (
   content text not null check (char_length(content) between 1 and 280),
   sender_name text,
   is_anonymous boolean not null default true,
+  answered_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.questions add column if not exists answered_at timestamptz;
 
 create table if not exists public.voice_posts (
   id uuid primary key default gen_random_uuid(),

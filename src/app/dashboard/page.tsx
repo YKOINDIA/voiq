@@ -29,6 +29,8 @@ export default async function DashboardPage() {
     resolvedProfile.username != null
       ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${resolvedProfile.username}`
       : null;
+  const unansweredQuestions = questions.filter((question) => !question.answered_at);
+  const answeredQuestions = questions.filter((question) => Boolean(question.answered_at));
 
   return (
     <main className="dashboard-shell">
@@ -70,6 +72,9 @@ export default async function DashboardPage() {
                 公開ページを見る
               </Link>
             ) : null}
+            <Link className="secondary-button" href="/rankings">
+              ランキングを見る
+            </Link>
             <form action={signOut}>
               <button className="secondary-button" type="submit">
                 ログアウト
@@ -89,24 +94,52 @@ export default async function DashboardPage() {
             </p>
           ) : (
             <div className="question-list">
-              {questions.map((question) => (
-                <article key={question.id} className="question-item">
-                  <p>{question.content}</p>
-                  <div className="question-meta">
-                    <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
-                    <span>{new Date(question.created_at).toLocaleString("ja-JP")}</span>
+              <article className="question-item">
+                <strong>未回答 {unansweredQuestions.length}</strong>
+                {unansweredQuestions.length === 0 ? (
+                  <p>未回答の質問はありません。</p>
+                ) : (
+                  <div className="question-list nested-question-list">
+                    {unansweredQuestions.map((question) => (
+                      <article key={question.id} className="question-item">
+                        <p>{question.content}</p>
+                        <div className="question-meta">
+                          <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
+                          <span>{new Date(question.created_at).toLocaleString("ja-JP")}</span>
+                        </div>
+                      </article>
+                    ))}
                   </div>
-                </article>
-              ))}
+                )}
+              </article>
+
+              <article className="question-item">
+                <strong>回答済み {answeredQuestions.length}</strong>
+                {answeredQuestions.length === 0 ? (
+                  <p>まだ回答済みの質問はありません。</p>
+                ) : (
+                  <div className="question-list nested-question-list">
+                    {answeredQuestions.map((question) => (
+                      <article key={question.id} className="question-item">
+                        <p>{question.content}</p>
+                        <div className="question-meta">
+                          <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
+                          <span>{new Date(question.answered_at ?? question.created_at).toLocaleString("ja-JP")}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </article>
             </div>
           )}
         </article>
       </section>
 
-      {questions.length > 0 ? (
+      {unansweredQuestions.length > 0 ? (
         <section className="question-section">
           <VoiceReplyComposer
-            questions={questions.map((question) => ({
+            questions={unansweredQuestions.map((question) => ({
               id: question.id,
               content: question.content,
               is_anonymous: question.is_anonymous,

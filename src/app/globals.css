@@ -486,6 +486,10 @@ button {
   gap: 12px;
 }
 
+.nested-question-list {
+  margin-top: 12px;
+}
+
 .question-item {
   padding: 16px;
   border-radius: 20px;
@@ -557,6 +561,25 @@ button {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.82);
   font: inherit;
+}
+
+.ranking-board {
+  display: grid;
+  gap: 12px;
+}
+
+.ranking-row {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ranking-row h3,
+.ranking-row p {
+  margin: 0;
 }
 
 .settings-divider {
