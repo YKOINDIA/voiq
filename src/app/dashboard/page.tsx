@@ -128,6 +128,7 @@ export default async function DashboardPage() {
             <div className="question-list">
               {voicePosts.map((post) => (
                 <article key={post.id} className="question-item">
+                  {post.question_content ? <p>Q. {post.question_content}</p> : null}
                   <div className="question-meta">
                     <span>{post.voice_mode}</span>
                     <span>{post.duration_seconds}秒</span>
@@ -135,6 +136,13 @@ export default async function DashboardPage() {
                     <span>{new Date(post.created_at).toLocaleString("ja-JP")}</span>
                   </div>
                   {post.audio_url ? <audio controls src={post.audio_url} className="audio-preview" /> : null}
+                  {post.reactions ? (
+                    <div className="reaction-inline">
+                      <span>拍手 {post.reactions.clap}</span>
+                      <span>笑い声 {post.reactions.laugh}</span>
+                      <span>もう一回 {post.reactions.replay}</span>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

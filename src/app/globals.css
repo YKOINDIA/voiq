@@ -539,6 +539,26 @@ button {
   margin-top: 16px;
 }
 
+.reaction-stack {
+  margin-top: 14px;
+}
+
+.reaction-buttons,
+.reaction-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reaction-chip,
+.reaction-inline span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+  font: inherit;
+}
+
 .settings-divider {
   height: 1px;
   margin: 24px 0;
