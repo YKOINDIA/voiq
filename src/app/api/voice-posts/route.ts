@@ -3,6 +3,23 @@ import { NextResponse } from "next/server";
 import { ensureProfileForUser } from "@/lib/profiles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { isVoiceModeAllowed } from "@/lib/voice-modes";
+
+function getFileExtension(file: File) {
+  if (file.type === "audio/wav") {
+    return "wav";
+  }
+
+  if (file.type === "audio/mpeg") {
+    return "mp3";
+  }
+
+  if (file.type === "audio/mp4") {
+    return "m4a";
+  }
+
+  return "webm";
+}
 
 export async function POST(request: Request) {
   const supabase = await getSupabaseServerClient();
@@ -29,6 +46,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "質問が選択されていません。" }, { status: 400 });
   }
 
+  if (!file.type.startsWith("audio/")) {
+    return NextResponse.json({ error: "音声ファイルのみ投稿できます。" }, { status: 400 });
+  }
+
+  if (!isVoiceModeAllowed(voiceMode, profile.is_premium)) {
+    return NextResponse.json({ error: "このボイスモードは利用できません。" }, { status: 400 });
+  }
+
   const maxDurationSeconds = profile.is_premium ? 60 : 10;
 
   if (durationSeconds < 1 || durationSeconds > maxDurationSeconds) {
@@ -36,7 +61,7 @@ export async function POST(request: Request) {
       {
         error: profile.is_premium
           ? "Premium ユーザーは60秒まで録音できます。"
-          : "無料ユーザーは10秒までです。"
+          : "Free ユーザーは10秒まで録音できます。"
       },
       { status: 400 }
     );
@@ -55,12 +80,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const path = `${profile.id}/${randomUUID()}.webm`;
+  const path = `${profile.id}/${randomUUID()}.${getFileExtension(file)}`;
   const arrayBuffer = await file.arrayBuffer();
 
   const uploadResult = await admin.storage
     .from("voice-posts")
-    .upload(path, arrayBuffer, { contentType: "audio/webm", upsert: false });
+    .upload(path, arrayBuffer, { contentType: file.type, upsert: false });
 
   if (uploadResult.error) {
     return NextResponse.json({ error: uploadResult.error.message }, { status: 500 });
