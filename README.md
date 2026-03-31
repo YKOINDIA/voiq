@@ -32,6 +32,7 @@
 - `RESEND_API_KEY`
 - `SENTRY_DSN`
 - `GEMINI_API_KEY`
+- `CRON_SECRET`
 
 ## Current Status
 
@@ -40,12 +41,14 @@
 - ダッシュボードをログイン保護ページとして追加済み
 - ログイン時の `profiles` 自動作成とプロフィール編集画面を追加済み
 - 公開質問ページと質問 inbox 表示を追加済み
+- 10秒音声回答の録音、Storage 保存、回答一覧を追加済み
+- 24時間で期限切れ音声を削除する cron route を追加済み
 - Supabase 用の browser/server client 初期化を追加済み
 - 初期テーブル設計と RLS 方針を `supabase/schema.sql` に追加済み
 
 ## Next Steps
 
-1. 24時間自動削除と Premium 永続保存の分岐を実装
+1. Premium では `expires_at` を付けない分岐を実装
 2. 音声投稿と質問を紐づける回答フローを実装
 3. Stripe で Premium を解放
 4. オーディオグラムとリアクション SE を実装
