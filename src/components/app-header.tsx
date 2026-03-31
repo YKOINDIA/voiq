@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { signOut } from "@/app/sign-in/actions";
 
 type AppHeaderProps = {
   isSignedIn: boolean;
@@ -24,11 +23,9 @@ export function AppHeader({ isSignedIn, isAdmin }: AppHeaderProps) {
           {isSignedIn ? <Link href="/dashboard">ダッシュボード</Link> : null}
           {isAdmin ? <Link href="/admin">管理画面</Link> : null}
           {isSignedIn ? (
-            <form action={signOut}>
-              <button type="submit" className="app-header__button">
-                ログアウト
-              </button>
-            </form>
+            <Link href="/auth/sign-out" className="app-header__button">
+              ログアウト
+            </Link>
           ) : (
             <Link href="/sign-in" className="app-header__button">
               ログイン
