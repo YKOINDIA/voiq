@@ -113,6 +113,7 @@ export default async function DashboardPage() {
               sender_name: question.sender_name
             }))}
             maxDurationSeconds={resolvedProfile.is_premium ? 60 : 10}
+            isPremium={resolvedProfile.is_premium}
           />
         </section>
       ) : null}
@@ -130,6 +131,7 @@ export default async function DashboardPage() {
                   <div className="question-meta">
                     <span>{post.voice_mode}</span>
                     <span>{post.duration_seconds}秒</span>
+                    <span>{post.expires_at ? "24時間で削除" : "無期限保存"}</span>
                     <span>{new Date(post.created_at).toLocaleString("ja-JP")}</span>
                   </div>
                   {post.audio_url ? <audio controls src={post.audio_url} className="audio-preview" /> : null}

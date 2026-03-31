@@ -72,6 +72,20 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           </form>
         </div>
 
+        <div className="settings-divider" />
+
+        <div className="password-panel">
+          <h2>プラン状態</h2>
+          <p>
+            現在のプラン: <strong>{resolvedProfile.is_premium ? "Premium" : "Free"}</strong>
+          </p>
+          <p>
+            {resolvedProfile.is_premium
+              ? "60秒録音と無期限保存が有効です。"
+              : "無料プランでは 10 秒録音、24時間で自動削除です。"}
+          </p>
+        </div>
+
         <div className="auth-links">
           <Link className="secondary-button" href="/dashboard">
             ダッシュボードへ

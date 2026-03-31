@@ -12,11 +12,13 @@ type QuestionItem = {
 type VoiceReplyComposerProps = {
   questions: QuestionItem[];
   maxDurationSeconds: number;
+  isPremium: boolean;
 };
 
 export function VoiceReplyComposer({
   questions,
-  maxDurationSeconds
+  maxDurationSeconds,
+  isPremium
 }: VoiceReplyComposerProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -133,8 +135,12 @@ export function VoiceReplyComposer({
   return (
     <article className="profile-card">
       <span className="section-label">Voice Reply</span>
-      <h2>10秒で音声回答する</h2>
-      <p>無料ユーザー向けに、まずは 10 秒までの一言回答を録音して投稿できます。</p>
+      <h2>{isPremium ? "60秒でじっくり音声回答する" : "10秒で音声回答する"}</h2>
+      <p>
+        {isPremium
+          ? "Premium ユーザーは 60 秒まで録音でき、回答は自動削除されません。"
+          : "無料ユーザーは 10 秒まで録音でき、回答は 24 時間で自動削除されます。"}
+      </p>
 
       <div className="composer-grid">
         <label>

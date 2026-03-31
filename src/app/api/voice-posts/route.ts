@@ -29,8 +29,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "質問が選択されていません。" }, { status: 400 });
   }
 
-  if (durationSeconds < 1 || durationSeconds > 10) {
-    return NextResponse.json({ error: "無料ユーザーは10秒までです。" }, { status: 400 });
+  const maxDurationSeconds = profile.is_premium ? 60 : 10;
+
+  if (durationSeconds < 1 || durationSeconds > maxDurationSeconds) {
+    return NextResponse.json(
+      {
+        error: profile.is_premium
+          ? "Premium ユーザーは60秒まで録音できます。"
+          : "無料ユーザーは10秒までです。"
+      },
+      { status: 400 }
+    );
   }
 
   const admin = getSupabaseAdminClient();
@@ -63,7 +72,7 @@ export async function POST(request: Request) {
     storage_path: path,
     duration_seconds: durationSeconds,
     voice_mode: voiceMode,
-    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    expires_at: profile.is_premium ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   });
 
   if (insertResult.error) {
