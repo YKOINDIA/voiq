@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { VoiceReplyComposer } from "@/components/voice-reply-composer";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { ensureProfileForUser } from "@/lib/profiles";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
 const dashboardCards = [
   {
@@ -32,6 +34,7 @@ export default async function DashboardPage() {
   const profile = await ensureProfileForUser(session.user);
   const email = session.user.email ?? "unknown";
   const questions = await getQuestionsForRecipient(session.user.id);
+  const voicePosts = await getVoicePostsForAuthor(session.user.id);
   const askUrl =
     profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
 
@@ -96,6 +99,43 @@ export default async function DashboardPage() {
                     <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
                     <span>{new Date(question.created_at).toLocaleString("ja-JP")}</span>
                   </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+      </section>
+
+      {questions.length > 0 ? (
+        <section className="question-section">
+          <VoiceReplyComposer
+            questions={questions.map((question) => ({
+              id: question.id,
+              content: question.content,
+              is_anonymous: question.is_anonymous,
+              sender_name: question.sender_name
+            }))}
+            maxDurationSeconds={profile.is_premium ? 60 : 10}
+          />
+        </section>
+      ) : null}
+
+      <section className="question-section">
+        <article className="profile-card">
+          <span className="section-label">Recent Answers</span>
+          <h2>投稿した音声</h2>
+          {voicePosts.length === 0 ? (
+            <p>まだ音声回答はありません。届いた質問に 10 秒ボイスで返してみましょう。</p>
+          ) : (
+            <div className="question-list">
+              {voicePosts.map((post) => (
+                <article key={post.id} className="question-item">
+                  <div className="question-meta">
+                    <span>{post.voice_mode}</span>
+                    <span>{post.duration_seconds}秒</span>
+                    <span>{new Date(post.created_at).toLocaleString("ja-JP")}</span>
+                  </div>
+                  {post.audio_url ? <audio controls src={post.audio_url} className="audio-preview" /> : null}
                 </article>
               ))}
             </div>
