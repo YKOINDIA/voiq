@@ -39,14 +39,14 @@
 - Magic Link ログインページとコールバック処理を追加済み
 - ダッシュボードをログイン保護ページとして追加済み
 - ログイン時の `profiles` 自動作成とプロフィール編集画面を追加済み
+- 公開質問ページと質問 inbox 表示を追加済み
 - Supabase 用の browser/server client 初期化を追加済み
 - 初期テーブル設計と RLS 方針を `supabase/schema.sql` に追加済み
-- README と env テンプレートを整備済み
 
 ## Next Steps
 
-1. `supabase/schema.sql` の追記分を SQL Editor で再実行
-2. 質問投稿フォームと質問一覧を実装
-3. Supabase Storage へ音声アップロードを実装
-4. 24時間自動削除と Premium 永続保存の分岐を実装
-5. Stripe で Premium 解放
+1. Supabase Storage へ音声アップロードを実装
+2. 24時間自動削除と Premium 永続保存の分岐を実装
+3. 音声投稿と質問を紐づける回答フローを実装
+4. Stripe で Premium を解放
+5. オーディオグラムとリアクション SE を実装

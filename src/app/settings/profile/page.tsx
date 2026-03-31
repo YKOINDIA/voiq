@@ -33,6 +33,10 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         <p>
           ユーザー名、表示名、自己紹介を登録しておくと、質問の受け皿とランキング上の見え方を整えやすくなります。
         </p>
+        <p className="notice">
+          現在の質問募集URL:{" "}
+          {profile.username ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : "ユーザー名未設定"}
+        </p>
 
         <form className="auth-placeholder" action={updateProfile}>
           <label htmlFor="username">ユーザー名</label>

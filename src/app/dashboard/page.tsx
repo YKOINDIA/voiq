@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getQuestionsForRecipient } from "@/lib/questions";
 import { ensureProfileForUser } from "@/lib/profiles";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -30,6 +31,9 @@ export default async function DashboardPage() {
 
   const profile = await ensureProfileForUser(session.user);
   const email = session.user.email ?? "unknown";
+  const questions = await getQuestionsForRecipient(session.user.id);
+  const askUrl =
+    profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
 
   return (
     <main className="dashboard-shell">
@@ -56,9 +60,46 @@ export default async function DashboardPage() {
             <span>{profile.badge ?? "Badge 未設定"}</span>
             <span>{profile.title ?? "称号 未設定"}</span>
           </div>
-          <Link className="secondary-button" href="/settings/profile">
-            プロフィールを編集する
-          </Link>
+          {askUrl ? (
+            <div className="profile-link-block">
+              <strong>質問募集リンク</strong>
+              <p>{askUrl}</p>
+            </div>
+          ) : null}
+          <div className="auth-links">
+            <Link className="secondary-button" href="/settings/profile">
+              プロフィールを編集する
+            </Link>
+            {profile.username ? (
+              <Link className="secondary-button" href={`/ask/${profile.username}`}>
+                公開ページを見る
+              </Link>
+            ) : null}
+          </div>
+        </article>
+      </section>
+
+      <section className="question-section">
+        <article className="profile-card">
+          <span className="section-label">Inbox</span>
+          <h2>届いている質問</h2>
+          {questions.length === 0 ? (
+            <p>
+              まだ質問は届いていません。プロフィールを整えて、質問募集リンクをシェアすると集まりやすくなります。
+            </p>
+          ) : (
+            <div className="question-list">
+              {questions.map((question) => (
+                <article key={question.id} className="question-item">
+                  <p>{question.content}</p>
+                  <div className="question-meta">
+                    <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
+                    <span>{new Date(question.created_at).toLocaleString("ja-JP")}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </article>
       </section>
 
