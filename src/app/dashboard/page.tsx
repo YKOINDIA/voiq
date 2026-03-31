@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
+import { getFollowStats } from "@/lib/follows";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
@@ -25,8 +26,11 @@ const dashboardCards = [
 export default async function DashboardPage() {
   const { session, profile } = await getOrCreateProfileForCurrentUser();
   const email = session.user.email ?? "unknown";
-  const questions = await getQuestionsForRecipient(session.user.id);
-  const voicePosts = await getVoicePostsForAuthor(session.user.id);
+  const [questions, voicePosts, followStats] = await Promise.all([
+    getQuestionsForRecipient(session.user.id),
+    getVoicePostsForAuthor(session.user.id),
+    getFollowStats(session.user.id)
+  ]);
   const creatorIdentity = buildCreatorIdentity(profile, voicePosts);
   const askUrl =
     profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
@@ -58,6 +62,8 @@ export default async function DashboardPage() {
             <span>{creatorIdentity.badge}</span>
             <span>{creatorIdentity.title}</span>
             <span>リアクション {creatorIdentity.totalReactions}</span>
+            <span>フォロワー {followStats.followers}</span>
+            <span>フォロー中 {followStats.following}</span>
           </div>
           {askUrl ? (
             <div className="profile-link-block">

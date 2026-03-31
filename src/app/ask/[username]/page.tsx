@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
+import { FollowButton } from "@/components/follow-button";
 import { ReactionBar } from "@/components/reaction-bar";
+import { getFollowStats, isFollowingProfile } from "@/lib/follows";
 import { submitQuestion } from "@/app/ask/[username]/actions";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getProfileByUsername } from "@/lib/questions";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getPublicVoicePostsForAuthor } from "@/lib/voice-posts";
 
@@ -25,7 +28,17 @@ export default async function AskPage({ params, searchParams }: AskPageProps) {
 
   try {
     const profile = await getProfileByUsername(username);
-    const voicePosts = await getPublicVoicePostsForAuthor(profile.id);
+    const supabase = await getSupabaseServerClient();
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+    const [voicePosts, creatorStats, followsYou] = await Promise.all([
+      getPublicVoicePostsForAuthor(profile.id),
+      getFollowStats(profile.id),
+      session?.user.id && session.user.id !== profile.id
+        ? isFollowingProfile(session.user.id, profile.id)
+        : Promise.resolve(false)
+    ]);
     const creatorIdentity = buildCreatorIdentity(profile, voicePosts);
 
     return (
@@ -41,6 +54,12 @@ export default async function AskPage({ params, searchParams }: AskPageProps) {
             <span>{creatorIdentity.badge}</span>
             <span>{creatorIdentity.title}</span>
             <span>回答 {creatorIdentity.totalPosts}</span>
+            <span>フォロワー {creatorStats.followers}</span>
+          </div>
+          <div className="auth-links">
+            {session?.user.id && session.user.id !== profile.id ? (
+              <FollowButton username={username} isFollowing={followsYou} />
+            ) : null}
           </div>
 
           <form className="auth-placeholder" action={submitQuestion.bind(null, username)}>

@@ -45,6 +45,14 @@ create table if not exists public.reactions (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.follows (
+  follower_id uuid not null references public.profiles (id) on delete cascade,
+  following_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  check (follower_id <> following_id)
+);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -99,6 +107,7 @@ alter table public.profiles enable row level security;
 alter table public.questions enable row level security;
 alter table public.voice_posts enable row level security;
 alter table public.reactions enable row level security;
+alter table public.follows enable row level security;
 
 drop policy if exists "profiles are viewable by everyone" on public.profiles;
 create policy "profiles are viewable by everyone"
@@ -171,3 +180,24 @@ on public.reactions
 for insert
 to authenticated, anon
 with check (true);
+
+drop policy if exists "follows are viewable by everyone" on public.follows;
+create policy "follows are viewable by everyone"
+on public.follows
+for select
+to authenticated, anon
+using (true);
+
+drop policy if exists "users can follow from their own account" on public.follows;
+create policy "users can follow from their own account"
+on public.follows
+for insert
+to authenticated
+with check (auth.uid() = follower_id);
+
+drop policy if exists "users can unfollow from their own account" on public.follows;
+create policy "users can unfollow from their own account"
+on public.follows
+for delete
+to authenticated
+using (auth.uid() = follower_id);
