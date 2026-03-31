@@ -568,6 +568,33 @@ button {
   gap: 12px;
 }
 
+.ranking-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ranking-tab {
+  min-height: 46px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ranking-tab--active {
+  background: #1f2c42;
+  color: white;
+  border-color: #1f2c42;
+}
+
+.ranking-tab-panel {
+  display: grid;
+  gap: 12px;
+}
+
 .ranking-row {
   display: grid;
   gap: 12px;
