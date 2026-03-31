@@ -321,6 +321,10 @@ button {
   margin: 0 auto;
 }
 
+.auth-card--wide {
+  max-width: 980px;
+}
+
 .auth-card h1,
 .dashboard-hero h1 {
   margin: 16px 0 0;
@@ -341,8 +345,18 @@ button {
   margin-top: 24px;
 }
 
+.auth-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
 .auth-placeholder label {
   font-weight: 700;
+}
+
+.auth-placeholder h2 {
+  margin: 0 0 6px;
 }
 
 .auth-placeholder input {
@@ -654,7 +668,8 @@ button {
   .split-section,
   .plan-grid,
   .dashboard-grid,
-  .composer-grid {
+  .composer-grid,
+  .auth-dual-grid {
     grid-template-columns: 1fr;
   }
 

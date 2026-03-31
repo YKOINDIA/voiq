@@ -42,10 +42,6 @@ create table if not exists public.reactions (
   created_at timestamptz not null default now()
 );
 
-insert into storage.buckets (id, name, public)
-values ('voice-posts', 'voice-posts', true)
-on conflict (id) do nothing;
-
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -172,18 +168,3 @@ on public.reactions
 for insert
 to authenticated, anon
 with check (true);
-
-drop policy if exists "public can read voice files" on storage.objects;
-create policy "public can read voice files"
-on storage.objects
-for select
-to authenticated, anon
-using (bucket_id = 'voice-posts');
-
-drop policy if exists "service role manages voice files" on storage.objects;
-create policy "service role manages voice files"
-on storage.objects
-for all
-to service_role
-using (bucket_id = 'voice-posts')
-with check (bucket_id = 'voice-posts');

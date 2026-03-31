@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { ensureProfileForUser } from "@/lib/profiles";
@@ -78,6 +79,11 @@ export default async function DashboardPage() {
                 公開ページを見る
               </Link>
             ) : null}
+            <form action={signOut}>
+              <button className="secondary-button" type="submit">
+                ログアウト
+              </button>
+            </form>
           </div>
         </article>
       </section>

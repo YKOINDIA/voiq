@@ -34,6 +34,18 @@ export async function POST(request: Request) {
   }
 
   const admin = getSupabaseAdminClient();
+  const bucketLookup = await admin.storage.getBucket("voice-posts");
+
+  if (bucketLookup.error) {
+    const createBucketResult = await admin.storage.createBucket("voice-posts", {
+      public: true
+    });
+
+    if (createBucketResult.error && !createBucketResult.error.message.includes("already exists")) {
+      return NextResponse.json({ error: createBucketResult.error.message }, { status: 500 });
+    }
+  }
+
   const path = `${profile.id}/${randomUUID()}.webm`;
   const arrayBuffer = await file.arrayBuffer();
 
