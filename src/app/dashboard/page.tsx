@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
 import { getQuestionsForRecipient } from "@/lib/questions";
-import { ensureProfileForUser } from "@/lib/profiles";
+import { buildProfileSeed, type Profile } from "@/lib/profiles";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
@@ -32,12 +32,41 @@ export default async function DashboardPage() {
     redirect("/sign-in?error=先にログインしてください");
   }
 
-  const profile = await ensureProfileForUser(session.user);
+  let { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    const seed = buildProfileSeed(session.user);
+    const insertResult = await supabase.from("profiles").insert(seed);
+
+    if (insertResult.error) {
+      throw new Error(insertResult.error.message);
+    }
+
+    const reloadResult = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .single();
+
+    if (reloadResult.error) {
+      throw new Error(reloadResult.error.message);
+    }
+
+    profile = reloadResult.data;
+  }
+
+  const resolvedProfile = profile as Profile;
   const email = session.user.email ?? "unknown";
   const questions = await getQuestionsForRecipient(session.user.id);
   const voicePosts = await getVoicePostsForAuthor(session.user.id);
   const askUrl =
-    profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
+    resolvedProfile.username != null
+      ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${resolvedProfile.username}`
+      : null;
 
   return (
     <main className="dashboard-shell">
@@ -53,16 +82,16 @@ export default async function DashboardPage() {
       <section className="profile-summary">
         <article className="profile-card">
           <span className="section-label">Your Profile</span>
-          <h2>{profile.display_name ?? profile.username ?? "Voiq user"}</h2>
-          <p>@{profile.username ?? "username"}</p>
+          <h2>{resolvedProfile.display_name ?? resolvedProfile.username ?? "Voiq user"}</h2>
+          <p>@{resolvedProfile.username ?? "username"}</p>
           <p>
-            {profile.bio ??
+            {resolvedProfile.bio ??
               "まだ自己紹介は未設定です。声の雰囲気や得意ジャンルを書いておくと質問が集まりやすくなります。"}
           </p>
           <div className="profile-meta">
-            <span>{profile.is_premium ? "Premium" : "Free"}</span>
-            <span>{profile.badge ?? "Badge 未設定"}</span>
-            <span>{profile.title ?? "称号 未設定"}</span>
+            <span>{resolvedProfile.is_premium ? "Premium" : "Free"}</span>
+            <span>{resolvedProfile.badge ?? "Badge 未設定"}</span>
+            <span>{resolvedProfile.title ?? "称号 未設定"}</span>
           </div>
           {askUrl ? (
             <div className="profile-link-block">
@@ -74,8 +103,8 @@ export default async function DashboardPage() {
             <Link className="secondary-button" href="/settings/profile">
               プロフィールを編集する
             </Link>
-            {profile.username ? (
-              <Link className="secondary-button" href={`/ask/${profile.username}`}>
+            {resolvedProfile.username ? (
+              <Link className="secondary-button" href={`/ask/${resolvedProfile.username}`}>
                 公開ページを見る
               </Link>
             ) : null}
@@ -121,7 +150,7 @@ export default async function DashboardPage() {
               is_anonymous: question.is_anonymous,
               sender_name: question.sender_name
             }))}
-            maxDurationSeconds={profile.is_premium ? 60 : 10}
+            maxDurationSeconds={resolvedProfile.is_premium ? 60 : 10}
           />
         </section>
       ) : null}

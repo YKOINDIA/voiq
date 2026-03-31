@@ -539,6 +539,22 @@ button {
   margin-top: 16px;
 }
 
+.settings-divider {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--line);
+}
+
+.password-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.password-panel h2,
+.password-panel p {
+  margin: 0;
+}
+
 .section-heading {
   max-width: 760px;
 }

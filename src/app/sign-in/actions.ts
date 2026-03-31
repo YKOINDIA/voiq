@@ -72,6 +72,34 @@ export async function signUpWithPassword(formData: FormData) {
   );
 }
 
+export async function updatePassword(formData: FormData) {
+  const password = getString(formData, "password");
+  const confirmPassword = getString(formData, "confirmPassword");
+
+  if (!password) {
+    redirect("/settings/profile?error=新しいパスワードを入力してください");
+  }
+
+  if (password.length < 8) {
+    redirect("/settings/profile?error=パスワードは8文字以上にしてください");
+  }
+
+  if (password !== confirmPassword) {
+    redirect("/settings/profile?error=確認用パスワードが一致しません");
+  }
+
+  const supabase = await getSupabaseServerClient();
+  const { error } = await supabase.auth.updateUser({
+    password
+  });
+
+  if (error) {
+    redirect(`/settings/profile?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect("/settings/profile?success=パスワードを更新しました");
+}
+
 export async function signOut() {
   const supabase = await getSupabaseServerClient();
   await supabase.auth.signOut();

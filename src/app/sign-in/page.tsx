@@ -35,6 +35,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           毎回 Magic Link を開かなくても使えるように、通常のメール + パスワード方式に切り替えました。
           新規登録もこの画面からできます。
         </p>
+        <p className="notice">
+          すでに Magic Link で作ったアカウントがある場合は、新規登録ではなくログイン後にプロフィール設定画面でパスワードを設定してください。
+        </p>
 
         <div className="auth-dual-grid">
           <form className="auth-placeholder" action={signInWithPassword}>

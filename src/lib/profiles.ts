@@ -24,19 +24,22 @@ function buildUsername(user: User) {
   return `${normalized || "voiq"}_${user.id.slice(0, 6)}`;
 }
 
+export function buildProfileSeed(user: User) {
+  return {
+    id: user.id,
+    username: buildUsername(user),
+    display_name: user.user_metadata.display_name ?? user.email?.split("@")[0] ?? "Voiq user"
+  };
+}
+
 export async function ensureProfileForUser(user: User) {
   const admin = getSupabaseAdminClient();
-  const username = buildUsername(user);
-  const displayName = user.user_metadata.display_name ?? user.email?.split("@")[0] ?? "Voiq user";
+  const seed = buildProfileSeed(user);
 
   const { data, error } = await admin
     .from("profiles")
     .upsert(
-      {
-        id: user.id,
-        username,
-        display_name: displayName
-      },
+      seed,
       {
         onConflict: "id"
       }
