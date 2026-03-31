@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { AppHeader } from "@/components/app-header";
+import { getAdminEmails } from "@/lib/env";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,14 +30,24 @@ export const viewport: Viewport = {
   themeColor: "#fff7d6"
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await getSupabaseServerClient();
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+  const email = session?.user.email?.toLowerCase() ?? "";
+  const isAdmin = getAdminEmails().includes(email);
+
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        <AppHeader isSignedIn={Boolean(session)} isAdmin={isAdmin} />
+        {children}
+      </body>
     </html>
   );
 }
