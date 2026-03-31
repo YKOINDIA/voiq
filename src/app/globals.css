@@ -360,6 +360,21 @@ button {
   margin-top: 20px;
 }
 
+.notice {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+}
+
+.notice--success {
+  background: rgba(185, 240, 220, 0.38);
+}
+
+.notice--error {
+  background: rgba(255, 179, 198, 0.28);
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

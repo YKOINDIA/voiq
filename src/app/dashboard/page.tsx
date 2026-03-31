@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+
 const dashboardCards = [
   {
     title: "今日の質問",
@@ -13,15 +16,26 @@ const dashboardCards = [
   }
 ];
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const supabase = await getSupabaseServerClient();
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    redirect("/sign-in?error=先にログインしてください");
+  }
+
+  const email = session.user.email ?? "unknown";
+
   return (
     <main className="dashboard-shell">
       <section className="dashboard-hero">
         <span className="section-label">Creator Dashboard</span>
         <h1>答えやすく、育てやすい、Voiq の投稿画面。</h1>
         <p>
-          ここは認証後のホーム想定です。質問一覧、録音ボタン、匿名ボイス切り替え、
-          Premium 導線を一画面に集める構成へ広げられます。
+          ログイン済みユーザーとして <strong>{email}</strong> を確認しました。ここに質問一覧、
+          録音ボタン、匿名ボイス切り替え、Premium 導線を一画面に集めていきます。
         </p>
       </section>
 
