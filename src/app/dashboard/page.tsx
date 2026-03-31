@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
 import { getQuestionsForRecipient } from "@/lib/questions";
-import { buildProfileSeed, type Profile } from "@/lib/profiles";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
 import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
 const dashboardCards = [
@@ -23,43 +21,7 @@ const dashboardCards = [
 ];
 
 export default async function DashboardPage() {
-  const supabase = await getSupabaseServerClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect("/sign-in?error=先にログインしてください");
-  }
-
-  let { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    const seed = buildProfileSeed(session.user);
-    const insertResult = await supabase.from("profiles").insert(seed);
-
-    if (insertResult.error) {
-      throw new Error(insertResult.error.message);
-    }
-
-    const reloadResult = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single();
-
-    if (reloadResult.error) {
-      throw new Error(reloadResult.error.message);
-    }
-
-    profile = reloadResult.data;
-  }
-
-  const resolvedProfile = profile as Profile;
+  const { session, profile: resolvedProfile } = await getOrCreateProfileForCurrentUser();
   const email = session.user.email ?? "unknown";
   const questions = await getQuestionsForRecipient(session.user.id);
   const voicePosts = await getVoicePostsForAuthor(session.user.id);

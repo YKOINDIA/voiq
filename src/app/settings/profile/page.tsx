@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { updateProfile } from "@/app/settings/profile/actions";
 import { updatePassword } from "@/app/sign-in/actions";
-import { buildProfileSeed, type Profile } from "@/lib/profiles";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
 
 type ProfileSettingsPageProps = {
   searchParams?: Promise<{
@@ -15,43 +13,7 @@ type ProfileSettingsPageProps = {
 export default async function ProfileSettingsPage({ searchParams }: ProfileSettingsPageProps) {
   const resolvedSearchParams: { error?: string; success?: string } =
     (await searchParams) ?? {};
-  const supabase = await getSupabaseServerClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect("/sign-in?error=先にログインしてください");
-  }
-
-  let { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    const seed = buildProfileSeed(session.user);
-    const insertResult = await supabase.from("profiles").insert(seed);
-
-    if (insertResult.error) {
-      throw new Error(insertResult.error.message);
-    }
-
-    const reloadResult = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single();
-
-    if (reloadResult.error) {
-      throw new Error(reloadResult.error.message);
-    }
-
-    profile = reloadResult.data;
-  }
-
-  const resolvedProfile = profile as Profile;
+  const { profile: resolvedProfile } = await getOrCreateProfileForCurrentUser();
 
   return (
     <main className="auth-shell">
