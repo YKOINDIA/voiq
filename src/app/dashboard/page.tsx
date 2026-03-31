@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
+import { getAdminEmails } from "@/lib/env";
 import { getFollowStats } from "@/lib/follows";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
@@ -26,6 +27,7 @@ const dashboardCards = [
 export default async function DashboardPage() {
   const { session, profile } = await getOrCreateProfileForCurrentUser();
   const email = session.user.email ?? "unknown";
+  const isAdmin = getAdminEmails().includes(email.toLowerCase());
   const [questions, voicePosts, followStats] = await Promise.all([
     getQuestionsForRecipient(session.user.id),
     getVoicePostsForAuthor(session.user.id),
@@ -83,6 +85,11 @@ export default async function DashboardPage() {
             <Link className="secondary-button" href="/rankings">
               ランキングを見る
             </Link>
+            {isAdmin ? (
+              <Link className="secondary-button" href="/admin">
+                管理画面
+              </Link>
+            ) : null}
             <form action={signOut}>
               <button className="secondary-button" type="submit">
                 ログアウト

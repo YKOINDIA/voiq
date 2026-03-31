@@ -29,3 +29,16 @@ export function getServiceEnv() {
 export function getSupabaseServiceRoleKey() {
   return getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
+
+export function getAdminEmails() {
+  const configured = process.env.ADMIN_EMAILS?.trim();
+
+  if (!configured) {
+    return ["ykoindia@gmail.com"];
+  }
+
+  return configured
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
