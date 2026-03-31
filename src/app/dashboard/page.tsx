@@ -1,34 +1,35 @@
 import Link from "next/link";
 import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
+import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
+import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
 const dashboardCards = [
   {
-    title: "今日の質問",
-    body: "ログイン不要で届いた質問を一覧化し、すぐ録音できる導線を置く。"
+    title: "質問を集める",
+    body: "公開リンクをシェアして、匿名の質問を気軽に集められます。"
   },
   {
-    title: "録音ステータス",
-    body: "無料は 10 秒、Premium は 60 秒。匿名ボイスの選択もここで行う。"
+    title: "声で返す",
+    body: "Free は 10 秒、Premium は 60 秒まで。匿名ボイスに変えて答えることもできます。"
   },
   {
-    title: "声の実績",
-    body: "拍手数、完聴率、ランキング入り回数、バッジをプロフィール資産として表示。"
+    title: "反応が返る",
+    body: "拍手、笑い声、もう一回のリアクションで聞き専の反応がたまっていきます。"
   }
 ];
 
 export default async function DashboardPage() {
-  const { session, profile: resolvedProfile } = await getOrCreateProfileForCurrentUser();
+  const { session, profile } = await getOrCreateProfileForCurrentUser();
   const email = session.user.email ?? "unknown";
   const questions = await getQuestionsForRecipient(session.user.id);
   const voicePosts = await getVoicePostsForAuthor(session.user.id);
+  const creatorIdentity = buildCreatorIdentity(profile, voicePosts);
   const askUrl =
-    resolvedProfile.username != null
-      ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${resolvedProfile.username}`
-      : null;
+    profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
   const unansweredQuestions = questions.filter((question) => !question.answered_at);
   const answeredQuestions = questions.filter((question) => Boolean(question.answered_at));
 
@@ -36,26 +37,27 @@ export default async function DashboardPage() {
     <main className="dashboard-shell">
       <section className="dashboard-hero">
         <span className="section-label">Creator Dashboard</span>
-        <h1>答えやすく、育てやすい、Voiq の投稿画面。</h1>
+        <h1>質問を集めて、声で返す。Voiq の運営画面です。</h1>
         <p>
-          ログイン済みユーザーとして <strong>{email}</strong> を確認しました。プロフィールも自動作成済みです。
-          ここに質問一覧、録音ボタン、匿名ボイス切り替え、Premium 導線を一画面に集めていきます。
+          <strong>{email}</strong> でログイン中です。プロフィールと公開ページを整えて、
+          質問への音声回答、ランキング、シェア導線までここから回せます。
         </p>
       </section>
 
       <section className="profile-summary">
         <article className="profile-card">
           <span className="section-label">Your Profile</span>
-          <h2>{resolvedProfile.display_name ?? resolvedProfile.username ?? "Voiq user"}</h2>
-          <p>@{resolvedProfile.username ?? "username"}</p>
+          <h2>{profile.display_name ?? profile.username ?? "Voiq user"}</h2>
+          <p>@{profile.username ?? "username"}</p>
           <p>
-            {resolvedProfile.bio ??
-              "まだ自己紹介は未設定です。声の雰囲気や得意ジャンルを書いておくと質問が集まりやすくなります。"}
+            {profile.bio ??
+              "まだ自己紹介が入っていません。声の特徴や好きなジャンルを書いておくと質問が集まりやすくなります。"}
           </p>
           <div className="profile-meta">
-            <span>{resolvedProfile.is_premium ? "Premium" : "Free"}</span>
-            <span>{resolvedProfile.badge ?? "Badge 未設定"}</span>
-            <span>{resolvedProfile.title ?? "称号 未設定"}</span>
+            <span>{profile.is_premium ? "Premium" : "Free"}</span>
+            <span>{creatorIdentity.badge}</span>
+            <span>{creatorIdentity.title}</span>
+            <span>リアクション {creatorIdentity.totalReactions}</span>
           </div>
           {askUrl ? (
             <div className="profile-link-block">
@@ -65,10 +67,10 @@ export default async function DashboardPage() {
           ) : null}
           <div className="auth-links">
             <Link className="secondary-button" href="/settings/profile">
-              プロフィールを編集する
+              プロフィールを編集
             </Link>
-            {resolvedProfile.username ? (
-              <Link className="secondary-button" href={`/ask/${resolvedProfile.username}`}>
+            {profile.username ? (
+              <Link className="secondary-button" href={`/ask/${profile.username}`}>
                 公開ページを見る
               </Link>
             ) : null}
@@ -89,9 +91,7 @@ export default async function DashboardPage() {
           <span className="section-label">Inbox</span>
           <h2>届いている質問</h2>
           {questions.length === 0 ? (
-            <p>
-              まだ質問は届いていません。プロフィールを整えて、質問募集リンクをシェアすると集まりやすくなります。
-            </p>
+            <p>まだ質問はありません。公開ページや質問募集リンクをシェアしてみましょう。</p>
           ) : (
             <div className="question-list">
               <article className="question-item">
@@ -124,7 +124,9 @@ export default async function DashboardPage() {
                         <p>{question.content}</p>
                         <div className="question-meta">
                           <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
-                          <span>{new Date(question.answered_at ?? question.created_at).toLocaleString("ja-JP")}</span>
+                          <span>
+                            {new Date(question.answered_at ?? question.created_at).toLocaleString("ja-JP")}
+                          </span>
                         </div>
                       </article>
                     ))}
@@ -145,8 +147,8 @@ export default async function DashboardPage() {
               is_anonymous: question.is_anonymous,
               sender_name: question.sender_name
             }))}
-            maxDurationSeconds={resolvedProfile.is_premium ? 60 : 10}
-            isPremium={resolvedProfile.is_premium}
+            maxDurationSeconds={profile.is_premium ? 60 : 10}
+            isPremium={profile.is_premium}
           />
         </section>
       ) : null}
@@ -156,19 +158,26 @@ export default async function DashboardPage() {
           <span className="section-label">Recent Answers</span>
           <h2>投稿した音声</h2>
           {voicePosts.length === 0 ? (
-            <p>まだ音声回答はありません。届いた質問に 10 秒ボイスで返してみましょう。</p>
+            <p>まだ音声回答はありません。まずはひとつ録音して投稿してみましょう。</p>
           ) : (
             <div className="question-list">
               {voicePosts.map((post) => (
                 <article key={post.id} className="question-item">
                   {post.question_content ? <p>Q. {post.question_content}</p> : null}
                   <div className="question-meta">
-                    <span>{post.voice_mode}</span>
+                    <span>{getVoiceModeLabel(post.voice_mode)}</span>
                     <span>{post.duration_seconds}秒</span>
-                    <span>{post.expires_at ? "24時間で削除" : "無期限保存"}</span>
+                    <span>{post.expires_at ? "24時間で消える" : "無期限保存"}</span>
                     <span>{new Date(post.created_at).toLocaleString("ja-JP")}</span>
                   </div>
                   {post.audio_url ? <audio controls src={post.audio_url} className="audio-preview" /> : null}
+                  <div className="auth-links">
+                    {post.share_url ? (
+                      <Link className="secondary-button" href={post.share_url}>
+                        波形シェアを見る
+                      </Link>
+                    ) : null}
+                  </div>
                   {post.reactions ? (
                     <div className="reaction-inline">
                       <span>拍手 {post.reactions.clap}</span>

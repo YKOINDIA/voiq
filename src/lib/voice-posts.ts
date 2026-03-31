@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getProfileById } from "@/lib/profiles";
 
 export type VoicePost = {
   id: string;
@@ -18,6 +19,7 @@ export type VoicePost = {
     laugh: number;
     replay: number;
   };
+  share_url?: string;
 };
 
 type ReactionRow = {
@@ -62,7 +64,8 @@ async function enrichVoicePosts(posts: VoicePost[]) {
     ...item,
     question_content: item.question_id ? questionMap.get(item.question_id) ?? null : null,
     audio_url: admin.storage.from("voice-posts").getPublicUrl(item.storage_path).data.publicUrl,
-    reactions: reactionMap.get(item.id) ?? { clap: 0, laugh: 0, replay: 0 }
+    reactions: reactionMap.get(item.id) ?? { clap: 0, laugh: 0, replay: 0 },
+    share_url: `${process.env.NEXT_PUBLIC_SITE_URL}/share/${item.id}`
   }));
 }
 
@@ -98,4 +101,30 @@ export async function getPublicVoicePostsForAuthor(authorId: string) {
   }
 
   return enrichVoicePosts((data ?? []) as VoicePost[]);
+}
+
+export async function getVoicePostById(voicePostId: string) {
+  const admin = getSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("voice_posts")
+    .select("*")
+    .eq("id", voicePostId)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const [enriched] = await enrichVoicePosts([data as VoicePost]);
+  const author = await getProfileById(enriched.author_id);
+
+  return {
+    post: enriched,
+    author
+  };
 }
