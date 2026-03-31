@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { features, launchSteps, plans, rankingSamples } from "@/lib/site-data";
 
 const waveformBars = Array.from({ length: 20 }, (_, index) => ({
@@ -23,6 +24,9 @@ export default function Home() {
             <a className="secondary-button" href="#plans">
               料金設計を見る
             </a>
+            <Link className="secondary-button" href="/sign-in">
+              ログイン導線を見る
+            </Link>
           </div>
           <dl className="hero-stats">
             <div>
@@ -86,8 +90,8 @@ export default function Home() {
           <p className="section-label">Question Flow</p>
           <ol className="simple-list">
             <li>質問者はログイン不要で質問を投げる</li>
-            <li>回答者はメールログイン後に録音 or 匿名ボイス変換</li>
-            <li>音声回答がタイムラインに載り、SNS シェアもできる</li>
+            <li>回答者はメールログイン後に録音か匿名ボイス変換で返す</li>
+            <li>音声回答がタイムラインに並び、SNS にシェアできる</li>
           </ol>
         </article>
       </section>
@@ -126,7 +130,7 @@ export default function Home() {
           <p className="section-label">Creator Incentive</p>
           <h2>バッジ、称号、フォローで継続投稿を後押し。</h2>
           <p>
-            再生数だけではなく、リアクション率・完聴率・ランキング入賞回数を可視化。
+            再生数だけではなく、リアクション率、完聴率、ランキング入賞回数を可視化。
             声質や芸風ごとの強みが残るので、文字版質問箱よりも個性が資産になりやすい設計です。
           </p>
         </article>

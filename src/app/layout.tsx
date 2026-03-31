@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "質問箱の気軽さをそのままに、10秒ボイスで答えられる匿名音声サービス。24時間で消える一言投稿と匿名ボイスで、声のハードルを下げる。",
   manifest: "/manifest.webmanifest",
   applicationName: "Voiq",
-  keywords: ["Voiq", "音声質問箱", "匿名ボイス", "PWA", "Next.js"],
+  keywords: ["Voiq", "音声質問箱", "匿名ボイス", "PWA", "Next.js", "Supabase"],
   openGraph: {
     title: "Voiq | 10秒で答える音声質問箱",
     description:
