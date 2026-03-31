@@ -19,9 +19,13 @@ export function getPublicEnv() {
 export function getServiceEnv() {
   return {
     supabaseServiceRoleKey: getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    stripeSecretKey: getRequiredEnv("STRIPE_SECRET_KEY"),
-    resendApiKey: getRequiredEnv("RESEND_API_KEY"),
-    sentryDsn: getRequiredEnv("SENTRY_DSN"),
-    geminiApiKey: getRequiredEnv("GEMINI_API_KEY")
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+    resendApiKey: process.env.RESEND_API_KEY ?? "",
+    sentryDsn: process.env.SENTRY_DSN ?? "",
+    geminiApiKey: process.env.GEMINI_API_KEY ?? ""
   };
+}
+
+export function getSupabaseServiceRoleKey() {
+  return getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 }

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ensureProfileForUser } from "@/lib/profiles";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const dashboardCards = [
@@ -26,6 +28,7 @@ export default async function DashboardPage() {
     redirect("/sign-in?error=先にログインしてください");
   }
 
+  const profile = await ensureProfileForUser(session.user);
   const email = session.user.email ?? "unknown";
 
   return (
@@ -34,9 +37,29 @@ export default async function DashboardPage() {
         <span className="section-label">Creator Dashboard</span>
         <h1>答えやすく、育てやすい、Voiq の投稿画面。</h1>
         <p>
-          ログイン済みユーザーとして <strong>{email}</strong> を確認しました。ここに質問一覧、
-          録音ボタン、匿名ボイス切り替え、Premium 導線を一画面に集めていきます。
+          ログイン済みユーザーとして <strong>{email}</strong> を確認しました。プロフィールも自動作成済みです。
+          ここに質問一覧、録音ボタン、匿名ボイス切り替え、Premium 導線を一画面に集めていきます。
         </p>
+      </section>
+
+      <section className="profile-summary">
+        <article className="profile-card">
+          <span className="section-label">Your Profile</span>
+          <h2>{profile.display_name ?? profile.username ?? "Voiq user"}</h2>
+          <p>@{profile.username ?? "username"}</p>
+          <p>
+            {profile.bio ??
+              "まだ自己紹介は未設定です。声の雰囲気や得意ジャンルを書いておくと質問が集まりやすくなります。"}
+          </p>
+          <div className="profile-meta">
+            <span>{profile.is_premium ? "Premium" : "Free"}</span>
+            <span>{profile.badge ?? "Badge 未設定"}</span>
+            <span>{profile.title ?? "称号 未設定"}</span>
+          </div>
+          <Link className="secondary-button" href="/settings/profile">
+            プロフィールを編集する
+          </Link>
+        </article>
       </section>
 
       <section className="dashboard-grid">
