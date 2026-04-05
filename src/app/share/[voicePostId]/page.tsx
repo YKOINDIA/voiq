@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { WaveformShareCard } from "@/components/waveform-share-card";
 import { getBadgesForUser } from "@/lib/badges";
@@ -6,6 +7,14 @@ import { getLevelFromPoints } from "@/lib/points";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getPublicVoicePostsForAuthor, getVoicePostById } from "@/lib/voice-posts";
+
+export const revalidate = 3600;
+
+const getCachedVoicePost = unstable_cache(
+  async (voicePostId: string) => getVoicePostById(voicePostId),
+  ["voice-post-by-id"],
+  { revalidate: 3600 }
+);
 
 type SharePageProps = {
   params: Promise<{
@@ -37,7 +46,7 @@ function buildOgImageUrl(params: {
 
 export async function generateMetadata({ params }: SharePageProps): Promise<Metadata> {
   const { voicePostId } = await params;
-  const result = await getVoicePostById(voicePostId);
+  const result = await getCachedVoicePost(voicePostId);
 
   if (!result) {
     return { title: "Voiq | 音声が見つかりません" };
@@ -82,7 +91,7 @@ export async function generateMetadata({ params }: SharePageProps): Promise<Meta
 
 export default async function SharePage({ params }: SharePageProps) {
   const { voicePostId } = await params;
-  const result = await getVoicePostById(voicePostId);
+  const result = await getCachedVoicePost(voicePostId);
 
   if (!result || !result.post.audio_url) {
     notFound();

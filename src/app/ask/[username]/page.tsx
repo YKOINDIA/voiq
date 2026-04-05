@@ -10,6 +10,8 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getPublicVoicePostsForAuthor } from "@/lib/voice-posts";
 
+export const revalidate = 120;
+
 type AskPageProps = {
   params: Promise<{
     username: string;

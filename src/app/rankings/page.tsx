@@ -1,6 +1,8 @@
 import { RankingTabs } from "@/components/ranking-tabs";
 import { getVoiceRankings } from "@/lib/rankings";
 
+export const revalidate = 3600;
+
 export default async function RankingsPage() {
   const boards = await getVoiceRankings();
 
