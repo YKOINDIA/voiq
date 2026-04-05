@@ -28,11 +28,15 @@ function getBonusPoints(tierIndex: number): number {
   return BADGE_BONUS_POINTS[tierIndex] ?? 10;
 }
 
-async function countForCategory(userId: string, category: BadgeCategory): Promise<number> {
-  const admin = getSupabaseAdminClient();
+async function countForCategory(
+  userId: string,
+  category: BadgeCategory,
+  admin?: ReturnType<typeof getSupabaseAdminClient>
+): Promise<number> {
+  const sb = admin ?? getSupabaseAdminClient();
 
   if (category === "voice_post") {
-    const { count, error } = await admin
+    const { count, error } = await sb
       .from("voice_posts")
       .select("*", { count: "exact", head: true })
       .eq("author_id", userId);
@@ -41,25 +45,17 @@ async function countForCategory(userId: string, category: BadgeCategory): Promis
   }
 
   if (category === "reaction") {
-    const { data: postIds, error: postError } = await admin
-      .from("voice_posts")
-      .select("id")
-      .eq("author_id", userId);
-    if (postError) throw new Error(postError.message);
-    if (!postIds || postIds.length === 0) return 0;
-    const { count, error } = await admin
+    // Single query: count reactions on the user's posts via inner join filter
+    const { count, error } = await sb
       .from("reactions")
-      .select("*", { count: "exact", head: true })
-      .in(
-        "voice_post_id",
-        postIds.map((p) => p.id)
-      );
+      .select("voice_posts!inner(author_id)", { count: "exact", head: true })
+      .eq("voice_posts.author_id", userId);
     if (error) throw new Error(error.message);
     return count ?? 0;
   }
 
   if (category === "follower") {
-    const { count, error } = await admin
+    const { count, error } = await sb
       .from("follows")
       .select("*", { count: "exact", head: true })
       .eq("following_id", userId);
@@ -68,7 +64,7 @@ async function countForCategory(userId: string, category: BadgeCategory): Promis
   }
 
   if (category === "question") {
-    const { count, error } = await admin
+    const { count, error } = await sb
       .from("questions")
       .select("*", { count: "exact", head: true })
       .eq("recipient_id", userId);
@@ -77,7 +73,8 @@ async function countForCategory(userId: string, category: BadgeCategory): Promis
   }
 
   if (category === "streak") {
-    const { data, error } = await admin
+    // Fetch only distinct dates, already sorted descending
+    const { data, error } = await sb
       .from("voice_posts")
       .select("created_at")
       .eq("author_id", userId)
@@ -86,16 +83,22 @@ async function countForCategory(userId: string, category: BadgeCategory): Promis
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) return 0;
 
-    const days = new Set(
-      data.map((row) => new Date(row.created_at).toISOString().slice(0, 10))
-    );
-    const sorted = [...days].sort().reverse();
+    // Deduplicate to calendar dates and walk backwards from most recent
+    const seen = new Set<string>();
+    const uniqueDays: string[] = [];
+    for (const row of data) {
+      const day = row.created_at.slice(0, 10);
+      if (!seen.has(day)) {
+        seen.add(day);
+        uniqueDays.push(day);
+      }
+    }
+
     let streak = 1;
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = new Date(sorted[i - 1]);
-      const curr = new Date(sorted[i]);
-      const diff = (prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24);
-      if (diff === 1) {
+    for (let i = 1; i < uniqueDays.length; i++) {
+      const prev = Date.parse(uniqueDays[i - 1]);
+      const curr = Date.parse(uniqueDays[i]);
+      if (prev - curr === 86_400_000) {
         streak++;
       } else {
         break;
@@ -113,39 +116,51 @@ export async function checkAndAwardBadges(
 ): Promise<{ name: string; icon: string }[]> {
   const admin = getSupabaseAdminClient();
 
-  const { data: badges, error: badgesError } = await admin
-    .from("badges")
-    .select("*")
-    .eq("category", category)
-    .order("threshold");
-  if (badgesError) throw new Error(badgesError.message);
+  // Run all three independent queries in parallel (3 queries instead of 3 sequential)
+  const [badgesResult, earnedResult, count] = await Promise.all([
+    admin
+      .from("badges")
+      .select("*")
+      .eq("category", category)
+      .order("threshold"),
+    admin
+      .from("user_badges")
+      .select("badge_id")
+      .eq("user_id", userId),
+    countForCategory(userId, category, admin)
+  ]);
+
+  if (badgesResult.error) throw new Error(badgesResult.error.message);
+  if (earnedResult.error) throw new Error(earnedResult.error.message);
+
+  const badges = badgesResult.data as BadgeRow[] | null;
   if (!badges || badges.length === 0) return [];
 
-  const { data: earned, error: earnedError } = await admin
-    .from("user_badges")
-    .select("badge_id")
-    .eq("user_id", userId);
-  if (earnedError) throw new Error(earnedError.message);
-  const earnedIds = new Set((earned ?? []).map((b) => b.badge_id));
+  const earnedIds = new Set((earnedResult.data ?? []).map((b) => b.badge_id));
 
-  const count = await countForCategory(userId, category);
-  const newBadges: { name: string; icon: string }[] = [];
-
-  for (let i = 0; i < (badges as BadgeRow[]).length; i++) {
-    const badge = (badges as BadgeRow[])[i];
+  // Collect all newly earned badges
+  const toAward: { badge: BadgeRow; tierIndex: number }[] = [];
+  for (let i = 0; i < badges.length; i++) {
+    const badge = badges[i];
     if (!earnedIds.has(badge.id) && count >= badge.threshold) {
-      const { error: insertError } = await admin
-        .from("user_badges")
-        .insert({ user_id: userId, badge_id: badge.id });
-      if (!insertError) {
-        const bonus = getBonusPoints(i + 1);
-        await addPoints(userId, bonus);
-        newBadges.push({ name: badge.name, icon: badge.icon });
-      }
+      toAward.push({ badge, tierIndex: i + 1 });
     }
   }
 
-  return newBadges;
+  if (toAward.length === 0) return [];
+
+  // Batch insert all new badges in one query
+  const { error: insertError } = await admin
+    .from("user_badges")
+    .insert(toAward.map(({ badge }) => ({ user_id: userId, badge_id: badge.id })));
+
+  if (insertError) throw new Error(insertError.message);
+
+  // Sum bonus points and award in a single call
+  const totalBonus = toAward.reduce((sum, { tierIndex }) => sum + getBonusPoints(tierIndex), 0);
+  await addPoints(userId, totalBonus);
+
+  return toAward.map(({ badge }) => ({ name: badge.name, icon: badge.icon }));
 }
 
 export async function getBadgesForUser(userId: string): Promise<UserBadge[]> {

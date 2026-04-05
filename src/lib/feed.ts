@@ -23,7 +23,11 @@ export type FeedItem = {
 
 export type FeedCategory = "all" | "latest" | "popular" | "short" | "long" | "anonymous";
 
-type VoicePostRow = {
+/* ------------------------------------------------------------------ */
+/*  Joined row shape returned by the voice_posts query with embeds    */
+/* ------------------------------------------------------------------ */
+
+type JoinedPostRow = {
   id: string;
   author_id: string;
   question_id: string | null;
@@ -32,12 +36,104 @@ type VoicePostRow = {
   voice_mode: string;
   expires_at: string | null;
   created_at: string;
+  profiles: {
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    is_premium: boolean;
+    points: number;
+  } | null;
+  questions: {
+    id: string;
+    content: string;
+  } | null;
 };
 
-type ReactionRow = {
+/* ------------------------------------------------------------------ */
+/*  Shared select string – embeds profiles & questions via FK joins    */
+/* ------------------------------------------------------------------ */
+
+const POSTS_SELECT = [
+  "id",
+  "author_id",
+  "question_id",
+  "storage_path",
+  "duration_seconds",
+  "voice_mode",
+  "expires_at",
+  "created_at",
+  "profiles!author_id(id, username, display_name, avatar_url, is_premium, points)",
+  "questions!question_id(id, content)",
+].join(", ");
+
+/* ------------------------------------------------------------------ */
+/*  Build reaction map via RPC (aggregated server-side)               */
+/* ------------------------------------------------------------------ */
+
+type ReactionCountRow = {
   voice_post_id: string;
   sound_type: "clap" | "laugh" | "replay";
+  cnt: number;
 };
+
+async function fetchReactionCounts(
+  admin: ReturnType<typeof getSupabaseAdminClient>,
+  postIds: string[]
+): Promise<Map<string, { clap: number; laugh: number; replay: number }>> {
+  const map = new Map<string, { clap: number; laugh: number; replay: number }>();
+  if (postIds.length === 0) return map;
+
+  const { data, error } = await admin.rpc("get_reaction_counts", {
+    post_ids: postIds,
+  });
+  if (error) throw new Error(error.message);
+
+  for (const r of (data ?? []) as ReactionCountRow[]) {
+    const cur = map.get(r.voice_post_id) ?? { clap: 0, laugh: 0, replay: 0 };
+    cur[r.sound_type] += r.cnt;
+    map.set(r.voice_post_id, cur);
+  }
+  return map;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Map joined rows to FeedItem[]                                     */
+/* ------------------------------------------------------------------ */
+
+function mapPostsToFeedItems(
+  admin: ReturnType<typeof getSupabaseAdminClient>,
+  posts: JoinedPostRow[],
+  reactionMap: Map<string, { clap: number; laugh: number; replay: number }>
+): FeedItem[] {
+  return posts.map((post) => {
+    const profile = post.profiles;
+    const levelInfo = getLevelFromPoints(profile?.points ?? 0);
+    return {
+      id: post.id,
+      authorId: post.author_id,
+      authorName: profile?.display_name ?? profile?.username ?? "Voiq user",
+      authorUsername: profile?.username ?? null,
+      authorAvatarUrl: profile?.avatar_url ?? null,
+      authorLevel: levelInfo.level,
+      authorLevelTitle: levelInfo.title,
+      authorLevelColor: levelInfo.color,
+      authorIsPremium: profile?.is_premium ?? false,
+      questionContent: post.questions?.content ?? null,
+      voiceMode: post.voice_mode,
+      durationSeconds: post.duration_seconds,
+      expiresAt: post.expires_at,
+      createdAt: post.created_at,
+      audioUrl: admin.storage.from("voice-posts").getPublicUrl(post.storage_path).data.publicUrl,
+      shareUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/share/${post.id}`,
+      reactions: reactionMap.get(post.id) ?? { clap: 0, laugh: 0, replay: 0 },
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  getPublicFeed                                                     */
+/* ------------------------------------------------------------------ */
 
 export async function getPublicFeed(
   category: FeedCategory = "all",
@@ -46,9 +142,10 @@ export async function getPublicFeed(
 ): Promise<FeedItem[]> {
   const admin = getSupabaseAdminClient();
 
+  // Single query: voice_posts + profiles + questions via FK joins
   let postsQuery = admin
     .from("voice_posts")
-    .select("*")
+    .select(POSTS_SELECT)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -66,59 +163,15 @@ export async function getPublicFeed(
   if (postsError) throw new Error(postsError.message);
   if (!posts || posts.length === 0) return [];
 
-  const voicePosts = posts as VoicePostRow[];
-  const authorIds = [...new Set(voicePosts.map((p) => p.author_id))];
-  const questionIds = voicePosts.map((p) => p.question_id).filter((id): id is string => Boolean(id));
+  const joinedPosts = posts as unknown as JoinedPostRow[];
 
-  const [profilesResult, questionsResult, reactionsResult] = await Promise.all([
-    admin.from("profiles").select("id, username, display_name, avatar_url, is_premium, points").in("id", authorIds),
-    questionIds.length > 0
-      ? admin.from("questions").select("id, content").in("id", questionIds)
-      : Promise.resolve({ data: [], error: null }),
-    admin.from("reactions").select("voice_post_id, sound_type").in("voice_post_id", voicePosts.map((p) => p.id))
-  ]);
-
-  if (profilesResult.error) throw new Error(profilesResult.error.message);
-  if (questionsResult.error) throw new Error(questionsResult.error.message);
-  if (reactionsResult.error) throw new Error(reactionsResult.error.message);
-
-  const profileMap = new Map(
-    (profilesResult.data ?? []).map((p) => [p.id, p])
-  );
-  const questionMap = new Map(
-    (questionsResult.data ?? []).map((q) => [q.id, q.content as string])
+  // Aggregated reaction counts via RPC (no individual rows in memory)
+  const reactionMap = await fetchReactionCounts(
+    admin,
+    joinedPosts.map((p) => p.id)
   );
 
-  const reactionMap = new Map<string, { clap: number; laugh: number; replay: number }>();
-  for (const r of (reactionsResult.data ?? []) as ReactionRow[]) {
-    const cur = reactionMap.get(r.voice_post_id) ?? { clap: 0, laugh: 0, replay: 0 };
-    cur[r.sound_type] += 1;
-    reactionMap.set(r.voice_post_id, cur);
-  }
-
-  let items: FeedItem[] = voicePosts.map((post) => {
-    const profile = profileMap.get(post.author_id);
-    const levelInfo = getLevelFromPoints(profile?.points ?? 0);
-    return {
-      id: post.id,
-      authorId: post.author_id,
-      authorName: profile?.display_name ?? profile?.username ?? "Voiq user",
-      authorUsername: profile?.username ?? null,
-      authorAvatarUrl: profile?.avatar_url ?? null,
-      authorLevel: levelInfo.level,
-      authorLevelTitle: levelInfo.title,
-      authorLevelColor: levelInfo.color,
-      authorIsPremium: profile?.is_premium ?? false,
-      questionContent: post.question_id ? questionMap.get(post.question_id) ?? null : null,
-      voiceMode: post.voice_mode,
-      durationSeconds: post.duration_seconds,
-      expiresAt: post.expires_at,
-      createdAt: post.created_at,
-      audioUrl: admin.storage.from("voice-posts").getPublicUrl(post.storage_path).data.publicUrl,
-      shareUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/share/${post.id}`,
-      reactions: reactionMap.get(post.id) ?? { clap: 0, laugh: 0, replay: 0 }
-    };
-  });
+  let items = mapPostsToFeedItems(admin, joinedPosts, reactionMap);
 
   // 検索フィルタ
   if (query) {
@@ -143,8 +196,13 @@ export async function getPublicFeed(
   return items;
 }
 
+/* ------------------------------------------------------------------ */
+/*  getFollowingFeed                                                  */
+/* ------------------------------------------------------------------ */
+
 export async function getFollowingFeed(userId: string, limit = 24): Promise<FeedItem[]> {
   const admin = getSupabaseAdminClient();
+
   const { data: follows, error: followsError } = await admin
     .from("follows")
     .select("following_id")
@@ -153,9 +211,11 @@ export async function getFollowingFeed(userId: string, limit = 24): Promise<Feed
   if (!follows || follows.length === 0) return [];
 
   const followingIds = follows.map((f) => f.following_id);
+
+  // Single query: voice_posts + profiles + questions via FK joins
   const { data: posts, error: postsError } = await admin
     .from("voice_posts")
-    .select("*")
+    .select(POSTS_SELECT)
     .in("author_id", followingIds)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .order("created_at", { ascending: false })
@@ -163,53 +223,13 @@ export async function getFollowingFeed(userId: string, limit = 24): Promise<Feed
   if (postsError) throw new Error(postsError.message);
   if (!posts || posts.length === 0) return [];
 
-  // 再利用のため getPublicFeed と同じ enrichment
-  const voicePosts = posts as VoicePostRow[];
-  const authorIds = [...new Set(voicePosts.map((p) => p.author_id))];
-  const questionIds = voicePosts.map((p) => p.question_id).filter((id): id is string => Boolean(id));
+  const joinedPosts = posts as unknown as JoinedPostRow[];
 
-  const [profilesResult, questionsResult, reactionsResult] = await Promise.all([
-    admin.from("profiles").select("id, username, display_name, avatar_url, is_premium, points").in("id", authorIds),
-    questionIds.length > 0
-      ? admin.from("questions").select("id, content").in("id", questionIds)
-      : Promise.resolve({ data: [], error: null }),
-    admin.from("reactions").select("voice_post_id, sound_type").in("voice_post_id", voicePosts.map((p) => p.id))
-  ]);
+  // Aggregated reaction counts via RPC (no individual rows in memory)
+  const reactionMap = await fetchReactionCounts(
+    admin,
+    joinedPosts.map((p) => p.id)
+  );
 
-  if (profilesResult.error) throw new Error(profilesResult.error.message);
-  if (questionsResult.error) throw new Error(questionsResult.error.message);
-  if (reactionsResult.error) throw new Error(reactionsResult.error.message);
-
-  const profileMap = new Map((profilesResult.data ?? []).map((p) => [p.id, p]));
-  const questionMap = new Map((questionsResult.data ?? []).map((q) => [q.id, q.content as string]));
-  const reactionMap = new Map<string, { clap: number; laugh: number; replay: number }>();
-  for (const r of (reactionsResult.data ?? []) as ReactionRow[]) {
-    const cur = reactionMap.get(r.voice_post_id) ?? { clap: 0, laugh: 0, replay: 0 };
-    cur[r.sound_type] += 1;
-    reactionMap.set(r.voice_post_id, cur);
-  }
-
-  return voicePosts.map((post) => {
-    const profile = profileMap.get(post.author_id);
-    const levelInfo = getLevelFromPoints(profile?.points ?? 0);
-    return {
-      id: post.id,
-      authorId: post.author_id,
-      authorName: profile?.display_name ?? profile?.username ?? "Voiq user",
-      authorUsername: profile?.username ?? null,
-      authorAvatarUrl: profile?.avatar_url ?? null,
-      authorLevel: levelInfo.level,
-      authorLevelTitle: levelInfo.title,
-      authorLevelColor: levelInfo.color,
-      authorIsPremium: profile?.is_premium ?? false,
-      questionContent: post.question_id ? questionMap.get(post.question_id) ?? null : null,
-      voiceMode: post.voice_mode,
-      durationSeconds: post.duration_seconds,
-      expiresAt: post.expires_at,
-      createdAt: post.created_at,
-      audioUrl: admin.storage.from("voice-posts").getPublicUrl(post.storage_path).data.publicUrl,
-      shareUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/share/${post.id}`,
-      reactions: reactionMap.get(post.id) ?? { clap: 0, laugh: 0, replay: 0 }
-    };
-  });
+  return mapPostsToFeedItems(admin, joinedPosts, reactionMap);
 }

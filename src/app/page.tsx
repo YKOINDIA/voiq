@@ -5,6 +5,8 @@ import { getFollowingFeed, getPublicFeed, type FeedCategory } from "@/lib/feed";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
+export const revalidate = 60;
+
 type HomePageProps = {
   searchParams?: Promise<{
     q?: string;
