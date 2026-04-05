@@ -1,3 +1,4 @@
+import { getLevelFromPoints } from "@/lib/points";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type RankingEntry = {
@@ -8,6 +9,9 @@ export type RankingEntry = {
   title: string | null;
   bio: string | null;
   isPremium: boolean;
+  level: number;
+  levelTitle: string;
+  levelColor: string;
   totalReactions: number;
   voicePosts: number;
   clap: number;
@@ -46,7 +50,9 @@ function createEmptyEntry(profile: {
   title: string | null;
   bio: string | null;
   is_premium: boolean;
+  points: number;
 }): RankingEntry {
+  const levelInfo = getLevelFromPoints(profile.points ?? 0);
   return {
     authorId: profile.id,
     username: profile.username,
@@ -55,6 +61,9 @@ function createEmptyEntry(profile: {
     title: profile.title,
     bio: profile.bio,
     isPremium: profile.is_premium,
+    level: levelInfo.level,
+    levelTitle: levelInfo.title,
+    levelColor: levelInfo.color,
     totalReactions: 0,
     voicePosts: 0,
     clap: 0,
@@ -107,7 +116,7 @@ function sortForBoard(boardId: string, entries: RankingEntry[]) {
 export async function getVoiceRankings() {
   const admin = getSupabaseAdminClient();
   const [profilesResult, voicePostsResult, reactionsResult] = await Promise.all([
-    admin.from("profiles").select("id, username, display_name, badge, title, bio, is_premium"),
+    admin.from("profiles").select("id, username, display_name, badge, title, bio, is_premium, points"),
     admin.from("voice_posts").select("id, author_id, voice_mode"),
     admin.from("reactions").select("voice_post_id, sound_type")
   ]);

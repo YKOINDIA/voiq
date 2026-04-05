@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { checkAndAwardBadges } from "@/lib/badges";
+import { addPoints } from "@/lib/points";
 import { getProfileByUsername } from "@/lib/questions";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -26,6 +28,10 @@ export async function submitQuestion(username: string, formData: FormData) {
   if (error) {
     redirect(`/ask/${username}?error=${encodeURIComponent(error.message)}`);
   }
+
+  // 質問受信者にポイント +2 & バッジチェック
+  addPoints(profile.id, 2).catch(() => {});
+  checkAndAwardBadges(profile.id, "question").catch(() => {});
 
   redirect(`/ask/${username}?success=${encodeURIComponent("質問を送信しました")}`);
 }
@@ -79,6 +85,10 @@ export async function toggleFollow(username: string) {
   if (error) {
     redirect(`/ask/${username}?error=${encodeURIComponent(error.message)}`);
   }
+
+  // フォローされた側にポイント +3 & バッジチェック
+  addPoints(targetProfile.id, 3).catch(() => {});
+  checkAndAwardBadges(targetProfile.id, "follower").catch(() => {});
 
   redirect(`/ask/${username}?success=${encodeURIComponent("フォローしました")}`);
 }

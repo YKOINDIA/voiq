@@ -48,6 +48,9 @@ export function RankingTabs({ boards }: RankingTabsProps) {
                   <div>
                     <h3>{entry.displayName ?? entry.username ?? "Voiq user"}</h3>
                     <p>@{entry.username ?? "username"}</p>
+                    <span className="level-badge" style={{ backgroundColor: entry.levelColor }}>
+                      Lv.{entry.level} {entry.levelTitle}
+                    </span>
                   </div>
                   <div className="reaction-inline">
                     <span>総合 {entry.totalReactions}</span>
