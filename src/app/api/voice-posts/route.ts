@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { checkAndAwardBadges } from "@/lib/badges";
+import { addPoints } from "@/lib/points";
 import { ensureProfileForUser } from "@/lib/profiles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -115,6 +117,11 @@ export async function POST(request: Request) {
   if (questionUpdateResult.error) {
     return NextResponse.json({ error: questionUpdateResult.error.message }, { status: 500 });
   }
+
+  // ポイント付与 & バッジチェック（投稿成功後、非ブロッキング）
+  addPoints(profile.id, 5).catch(() => {});
+  checkAndAwardBadges(profile.id, "voice_post").catch(() => {});
+  checkAndAwardBadges(profile.id, "streak").catch(() => {});
 
   return NextResponse.json({ success: true });
 }

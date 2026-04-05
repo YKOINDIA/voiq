@@ -10,6 +10,7 @@ export type Profile = {
   is_premium: boolean;
   badge: string | null;
   title: string | null;
+  points: number;
   created_at: string;
   updated_at: string;
 };

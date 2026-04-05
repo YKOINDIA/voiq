@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { signOut } from "@/app/sign-in/actions";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
+import { getBadgesForUser } from "@/lib/badges";
 import { getAdminEmails } from "@/lib/env";
 import { getFollowStats } from "@/lib/follows";
+import { getLevelProgress } from "@/lib/points";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
@@ -28,12 +30,14 @@ export default async function DashboardPage() {
   const { session, profile } = await getOrCreateProfileForCurrentUser();
   const email = session.user.email ?? "unknown";
   const isAdmin = getAdminEmails().includes(email.toLowerCase());
-  const [questions, voicePosts, followStats] = await Promise.all([
+  const [questions, voicePosts, followStats, userBadges] = await Promise.all([
     getQuestionsForRecipient(session.user.id),
     getVoicePostsForAuthor(session.user.id),
-    getFollowStats(session.user.id)
+    getFollowStats(session.user.id),
+    getBadgesForUser(session.user.id)
   ]);
   const creatorIdentity = buildCreatorIdentity(profile, voicePosts);
+  const levelProgress = getLevelProgress(profile.points ?? 0);
   const askUrl =
     profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
   const unansweredQuestions = questions.filter((question) => !question.answered_at);
@@ -59,14 +63,51 @@ export default async function DashboardPage() {
             {profile.bio ??
               "まだ自己紹介が入っていません。声の特徴や好きなジャンルを書いておくと質問が集まりやすくなります。"}
           </p>
+          <div className="level-bar-section">
+            <div className="level-bar-header">
+              <span className="level-badge" style={{ backgroundColor: levelProgress.current.color }}>
+                Lv.{levelProgress.current.level} {levelProgress.current.title}
+              </span>
+              <span className="level-points">{profile.points ?? 0} pt</span>
+            </div>
+            <div className="level-bar-track">
+              <div
+                className="level-bar-fill"
+                style={{
+                  width: `${Math.round(levelProgress.progress * 100)}%`,
+                  backgroundColor: levelProgress.current.color
+                }}
+              />
+            </div>
+            {levelProgress.next ? (
+              <p className="level-bar-hint">
+                次のレベル「{levelProgress.next.title}」まであと {levelProgress.next.points - (profile.points ?? 0)} pt
+              </p>
+            ) : (
+              <p className="level-bar-hint">最高レベルに到達しています</p>
+            )}
+          </div>
+
           <div className="profile-meta">
             <span>{profile.is_premium ? "Premium" : "Free"}</span>
             <span>{creatorIdentity.badge}</span>
-            <span>{creatorIdentity.title}</span>
             <span>リアクション {creatorIdentity.totalReactions}</span>
             <span>フォロワー {followStats.followers}</span>
             <span>フォロー中 {followStats.following}</span>
           </div>
+
+          {userBadges.length > 0 ? (
+            <div className="badge-list">
+              <strong>獲得バッジ</strong>
+              <div className="badge-grid">
+                {userBadges.map((b) => (
+                  <span key={b.id} className="badge-chip" title={b.description}>
+                    {b.icon} {b.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {askUrl ? (
             <div className="profile-link-block">
               <strong>質問募集リンク</strong>

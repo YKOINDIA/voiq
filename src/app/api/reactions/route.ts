@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { checkAndAwardBadges } from "@/lib/badges";
+import { addPoints } from "@/lib/points";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const ALLOWED_REACTIONS = new Set(["clap", "laugh", "replay"]);
@@ -26,6 +29,20 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // 投稿者にリアクションポイント +1 & バッジチェック
+  const admin = getSupabaseAdminClient();
+  (async () => {
+    const { data: post } = await admin
+      .from("voice_posts")
+      .select("author_id")
+      .eq("id", body.voicePostId)
+      .single();
+    if (post?.author_id) {
+      await addPoints(post.author_id, 1).catch(() => {});
+      await checkAndAwardBadges(post.author_id, "reaction").catch(() => {});
+    }
+  })().catch(() => {});
 
   return NextResponse.json({ success: true });
 }
