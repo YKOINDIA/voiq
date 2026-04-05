@@ -11,6 +11,7 @@ export type Profile = {
   badge: string | null;
   title: string | null;
   points: number;
+  birthday: string | null;
   created_at: string;
   updated_at: string;
 };

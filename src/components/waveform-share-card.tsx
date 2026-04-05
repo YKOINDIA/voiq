@@ -164,7 +164,11 @@ export function WaveformShareCard({
           <button type="button" className="primary-button" onClick={copyShareUrl}>
             {copied ? "リンクをコピーしました" : "シェアリンクをコピー"}
           </button>
-          <Link className="secondary-button" href={`https://x.com/intent/tweet?url=${encodeURIComponent(shareUrl)}`} target="_blank">
+          <Link
+            className="secondary-button"
+            href={`https://x.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(`${creatorName} の音声回答を聴いてみて #Voiq`)}`}
+            target="_blank"
+          >
             X にシェア
           </Link>
         </div>
