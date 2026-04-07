@@ -24,6 +24,7 @@ create table if not exists public.questions (
 );
 
 alter table public.questions add column if not exists answered_at timestamptz;
+alter table public.voice_posts add column if not exists category text;
 
 create table if not exists public.voice_posts (
   id uuid primary key default gen_random_uuid(),

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { transformVoiceBlob } from "@/lib/audio/voice-transform";
+import { VOICE_CATEGORIES, type VoiceCategory } from "@/lib/voice-categories";
 import { getVoiceModeOptions, type VoiceMode } from "@/lib/voice-modes";
 
 type QuestionItem = {
@@ -12,21 +13,29 @@ type QuestionItem = {
 };
 
 type VoiceReplyComposerProps = {
-  questions: QuestionItem[];
+  questions?: QuestionItem[];
+  mode?: "reply" | "standalone";
+  defaultCategory?: VoiceCategory;
   maxDurationSeconds: number;
   isPremium: boolean;
+  anchorId?: string;
 };
 
 export function VoiceReplyComposer({
-  questions,
+  questions = [],
+  mode = "reply",
+  defaultCategory,
   maxDurationSeconds,
-  isPremium
+  isPremium,
+  anchorId
 }: VoiceReplyComposerProps) {
+  const isStandalone = mode === "standalone";
   const voiceOptions = useMemo(() => getVoiceModeOptions(isPremium), [isPremium]);
   const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>(questions[0]?.id ?? "");
   const [voiceMode, setVoiceMode] = useState<VoiceMode>("original");
+  const [category, setCategory] = useState<VoiceCategory>(defaultCategory ?? "intro");
   const [sourceBlob, setSourceBlob] = useState<Blob | null>(null);
   const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -48,6 +57,20 @@ export function VoiceReplyComposer({
       }
     };
   }, []);
+
+  // URLハッシュからカテゴリプリセット (#standalone-composer?cat=intro 風の動線サポート)
+  useEffect(() => {
+    if (!isStandalone || typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    const match = /cat=([a-z]+)/.exec(hash);
+    if (match) {
+      const next = match[1];
+      if (VOICE_CATEGORIES.some((c) => c.value === next)) {
+        setCategory(next as VoiceCategory);
+      }
+    }
+  }, [isStandalone]);
 
   const updatePreviewUrl = (blob: Blob | null) => {
     if (previewUrlRef.current) {
@@ -168,8 +191,13 @@ export function VoiceReplyComposer({
   };
 
   const submitRecording = async () => {
-    if (!processedBlob || !selectedQuestionId) {
-      setStatus("音声と質問の選択が必要です。");
+    if (!processedBlob) {
+      setStatus("録音した音声がありません。");
+      return;
+    }
+
+    if (!isStandalone && !selectedQuestionId) {
+      setStatus("質問を選択してください。");
       return;
     }
 
@@ -184,7 +212,10 @@ export function VoiceReplyComposer({
     const extension = processedBlob.type === "audio/wav" ? "wav" : "webm";
     const formData = new FormData();
     formData.append("audio", processedBlob, `reply.${extension}`);
-    formData.append("questionId", selectedQuestionId);
+    if (!isStandalone) {
+      formData.append("questionId", selectedQuestionId);
+    }
+    formData.append("category", category);
     formData.append("voiceMode", voiceMode);
     formData.append("durationSeconds", String(Math.max(seconds, 1)));
 
@@ -210,26 +241,52 @@ export function VoiceReplyComposer({
     window.location.reload();
   };
 
+  const heading = isStandalone
+    ? defaultCategory === "intro"
+      ? "10秒で自己紹介ボイスを録音"
+      : "ひとことボイスを録音"
+    : isPremium
+      ? "60秒までじっくり音声回答"
+      : "10秒で音声回答";
+
+  const subheading = isStandalone
+    ? "質問なしで自由に投稿できます。カテゴリを選んで気軽に声を残しましょう。"
+    : isPremium
+      ? "Premium は 60 秒録音と特殊ボイスが使えます。回答は保存され続けます。"
+      : "Free は 10 秒の一言ボイスです。回答は 24 時間で自動消去されます。";
+
   return (
-    <article className="profile-card">
-      <span className="section-label">Voice Reply</span>
-      <h2>{isPremium ? "60秒までじっくり音声回答" : "10秒で音声回答"}</h2>
-      <p>
-        {isPremium
-          ? "Premium は 60 秒録音と特殊ボイスが使えます。回答は保存され続けます。"
-          : "Free は 10 秒の一言ボイスです。回答は 24 時間で自動消去されます。"}
-      </p>
+    <article className="profile-card" id={anchorId}>
+      <span className="section-label">{isStandalone ? "Voice Post" : "Voice Reply"}</span>
+      <h2>{heading}</h2>
+      <p>{subheading}</p>
 
       <div className="composer-grid">
+        {!isStandalone && questions.length > 0 ? (
+          <label>
+            <span>回答する質問</span>
+            <select
+              value={selectedQuestionId}
+              onChange={(event) => setSelectedQuestionId(event.target.value)}
+            >
+              {questions.map((question) => (
+                <option key={question.id} value={question.id}>
+                  {question.content}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
         <label>
-          <span>回答する質問</span>
+          <span>カテゴリ</span>
           <select
-            value={selectedQuestionId}
-            onChange={(event) => setSelectedQuestionId(event.target.value)}
+            value={category}
+            onChange={(event) => setCategory(event.target.value as VoiceCategory)}
           >
-            {questions.map((question) => (
-              <option key={question.id} value={question.id}>
-                {question.content}
+            {VOICE_CATEGORIES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>

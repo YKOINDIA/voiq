@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { signOut } from "@/app/sign-in/actions";
+import { AskShareButton } from "@/components/ask-share-button";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
 import { getAdminEmails } from "@/lib/env";
 import { getFollowStats } from "@/lib/follows";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
+import { getVoiceCategoryLabel } from "@/lib/voice-categories";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
@@ -43,12 +46,13 @@ export default async function DashboardPage() {
     <main className="dashboard-shell">
       <section className="dashboard-hero">
         <span className="section-label">Creator Dashboard</span>
-        <h1>質問を集めて、声で返す。Voiq の運営画面です。</h1>
+        <h1>質問を集めて、声で返す。</h1>
         <p>
-          <strong>{email}</strong> でログイン中です。プロフィールと公開ページを整えて、
-          質問への音声回答、ランキング、シェア導線までここから回せます。
+          <strong>{email}</strong> でログイン中。プロフィール、質問への音声回答、シェア導線をここから回せます。
         </p>
       </section>
+
+      {voicePosts.length === 0 ? <OnboardingBanner targetId="standalone-composer" /> : null}
 
       <section className="profile-summary">
         <article className="profile-card">
@@ -67,10 +71,15 @@ export default async function DashboardPage() {
             <span>フォロワー {followStats.followers}</span>
             <span>フォロー中 {followStats.following}</span>
           </div>
-          {askUrl ? (
+          {askUrl && profile.username ? (
             <div className="profile-link-block">
               <strong>質問募集リンク</strong>
               <p>{askUrl}</p>
+              <AskShareButton
+                username={profile.username}
+                displayName={profile.display_name ?? profile.username}
+                askUrl={askUrl}
+              />
             </div>
           ) : null}
           <div className="auth-links">
@@ -154,6 +163,7 @@ export default async function DashboardPage() {
       {unansweredQuestions.length > 0 ? (
         <section className="question-section">
           <VoiceReplyComposer
+            mode="reply"
             questions={unansweredQuestions.map((question) => ({
               id: question.id,
               content: question.content,
@@ -167,6 +177,16 @@ export default async function DashboardPage() {
       ) : null}
 
       <section className="question-section">
+        <VoiceReplyComposer
+          mode="standalone"
+          defaultCategory="intro"
+          maxDurationSeconds={profile.is_premium ? 60 : 10}
+          isPremium={profile.is_premium}
+          anchorId="standalone-composer"
+        />
+      </section>
+
+      <section className="question-section">
         <article className="profile-card">
           <span className="section-label">Recent Answers</span>
           <h2>投稿した音声</h2>
@@ -178,6 +198,9 @@ export default async function DashboardPage() {
                 <article key={post.id} className="question-item">
                   {post.question_content ? <p>Q. {post.question_content}</p> : null}
                   <div className="question-meta">
+                    {getVoiceCategoryLabel(post.category) ? (
+                      <span>{getVoiceCategoryLabel(post.category)}</span>
+                    ) : null}
                     <span>{getVoiceModeLabel(post.voice_mode)}</span>
                     <span>{post.duration_seconds}秒</span>
                     <span>{post.expires_at ? "24時間で消える" : "無期限保存"}</span>
