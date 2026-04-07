@@ -1,9 +1,12 @@
+import { getLevelFromPoints } from "@/lib/points";
 import type { Profile } from "@/lib/profiles";
 import type { VoicePost } from "@/lib/voice-posts";
 
 export type CreatorIdentity = {
   badge: string;
   title: string;
+  level: number;
+  levelColor: string;
   totalReactions: number;
   totalPosts: number;
 };
@@ -15,6 +18,7 @@ export function getVoicePostReactionTotal(post: VoicePost) {
 export function buildCreatorIdentity(profile: Profile, voicePosts: VoicePost[]): CreatorIdentity {
   const totalPosts = voicePosts.length;
   const totalReactions = voicePosts.reduce((sum, post) => sum + getVoicePostReactionTotal(post), 0);
+  const levelInfo = getLevelFromPoints(profile.points ?? 0);
 
   const badge =
     profile.badge ??
@@ -28,19 +32,13 @@ export function buildCreatorIdentity(profile: Profile, voicePosts: VoicePost[]):
             ? "Daily Talker"
             : "New Voice");
 
-  const title =
-    profile.title ??
-    (totalReactions >= 80
-      ? "拍手を集める人気ボイス"
-      : totalReactions >= 30
-        ? "リアクション上手"
-        : totalPosts >= 10
-          ? "毎日ひとこと回答中"
-          : "はじめての音声回答者");
+  const title = profile.title ?? levelInfo.title;
 
   return {
     badge,
     title,
+    level: levelInfo.level,
+    levelColor: levelInfo.color,
     totalReactions,
     totalPosts
   };

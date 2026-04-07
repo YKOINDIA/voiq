@@ -1,3 +1,4 @@
+import { getLevelFromPoints } from "@/lib/points";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type RankingEntry = {
@@ -8,6 +9,9 @@ export type RankingEntry = {
   title: string | null;
   bio: string | null;
   isPremium: boolean;
+  level: number;
+  levelTitle: string;
+  levelColor: string;
   totalReactions: number;
   voicePosts: number;
   clap: number;
@@ -27,46 +31,8 @@ export type RankingBoard = {
   entries: RankingEntry[];
 };
 
-type ReactionRow = {
-  voice_post_id: string;
-  sound_type: "clap" | "laugh" | "replay";
-};
-
-type VoicePostRow = {
-  id: string;
-  author_id: string;
-  voice_mode: string;
-};
-
-function createEmptyEntry(profile: {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  badge: string | null;
-  title: string | null;
-  bio: string | null;
-  is_premium: boolean;
-}): RankingEntry {
-  return {
-    authorId: profile.id,
-    username: profile.username,
-    displayName: profile.display_name,
-    badge: profile.badge,
-    title: profile.title,
-    bio: profile.bio,
-    isPremium: profile.is_premium,
-    totalReactions: 0,
-    voicePosts: 0,
-    clap: 0,
-    laugh: 0,
-    replay: 0,
-    originalPosts: 0,
-    highPosts: 0,
-    lowPosts: 0,
-    robotPosts: 0,
-    telephonePosts: 0
-  };
-}
+/** Maximum number of candidate authors to aggregate before scoring. */
+const TOP_AUTHORS_LIMIT = 50;
 
 function getBoardScore(boardId: string, entry: RankingEntry) {
   switch (boardId) {
@@ -104,37 +70,123 @@ function sortForBoard(boardId: string, entries: RankingEntry[]) {
     .slice(0, 10);
 }
 
+/**
+ * Fetch voice rankings using efficient, bounded queries.
+ *
+ * Strategy:
+ * 1. Fetch voice posts joined with their reaction counts, limited to authors
+ *    with the most posts (top N by post count as a proxy for ranking relevance).
+ * 2. For those posts, fetch aggregated reaction breakdowns per author.
+ * 3. Fetch only the profiles needed for those top authors.
+ *
+ * This avoids loading entire tables into memory.
+ */
 export async function getVoiceRankings() {
   const admin = getSupabaseAdminClient();
-  const [profilesResult, voicePostsResult, reactionsResult] = await Promise.all([
-    admin.from("profiles").select("id, username, display_name, badge, title, bio, is_premium"),
-    admin.from("voice_posts").select("id, author_id, voice_mode"),
-    admin.from("reactions").select("voice_post_id, sound_type")
-  ]);
 
-  if (profilesResult.error) {
-    throw new Error(profilesResult.error.message);
+  // Step 1: Get voice posts for authors who have at least one post.
+  // We fetch author_id and voice_mode, selecting only posts from the most
+  // active authors. Supabase PostgREST doesn't support GROUP BY directly,
+  // so we fetch posts scoped to top authors by using a subquery approach:
+  // first find the top author IDs, then fetch their posts and reactions.
+
+  // 1a: Find the top N authors by total reaction count received on their posts.
+  // We use a joined query: voice_posts with a count of reactions.
+  const topAuthorsResult = await admin
+    .from("voice_posts")
+    .select("author_id, reactions(count)")
+    .limit(1000);
+
+  if (topAuthorsResult.error) {
+    throw new Error(topAuthorsResult.error.message);
   }
 
-  if (voicePostsResult.error) {
-    throw new Error(voicePostsResult.error.message);
+  // Aggregate post counts and reaction counts per author in JS (on a bounded set).
+  const authorStats = new Map<string, { postCount: number; reactionCount: number }>();
+
+  for (const row of topAuthorsResult.data ?? []) {
+    const authorId = row.author_id as string;
+    const reactionCount = (row.reactions as unknown as { count: number }[])?.[0]?.count ?? 0;
+    const existing = authorStats.get(authorId);
+
+    if (existing) {
+      existing.postCount += 1;
+      existing.reactionCount += reactionCount;
+    } else {
+      authorStats.set(authorId, { postCount: 1, reactionCount });
+    }
+  }
+
+  // Rank authors by a rough proxy score (reactions * 2 + posts) and take top N.
+  const rankedAuthorIds = Array.from(authorStats.entries())
+    .sort(([, a], [, b]) => (b.reactionCount * 2 + b.postCount) - (a.reactionCount * 2 + a.postCount))
+    .slice(0, TOP_AUTHORS_LIMIT)
+    .map(([id]) => id);
+
+  if (rankedAuthorIds.length === 0) {
+    return buildBoards([]);
+  }
+
+  // Step 2: Fetch detailed data only for top authors — posts and reactions in parallel.
+  const [postsResult, reactionsResult, profilesResult] = await Promise.all([
+    admin
+      .from("voice_posts")
+      .select("id, author_id, voice_mode")
+      .in("author_id", rankedAuthorIds),
+    admin
+      .from("reactions")
+      .select("voice_post_id, sound_type, voice_posts!inner(author_id)")
+      .in("voice_posts.author_id", rankedAuthorIds),
+    admin
+      .from("profiles")
+      .select("id, username, display_name, badge, title, bio, is_premium, points")
+      .in("id", rankedAuthorIds)
+  ]);
+
+  if (postsResult.error) {
+    throw new Error(postsResult.error.message);
   }
 
   if (reactionsResult.error) {
     throw new Error(reactionsResult.error.message);
   }
 
-  const voicePosts = (voicePostsResult.data ?? []) as VoicePostRow[];
-  const reactionRows = (reactionsResult.data ?? []) as ReactionRow[];
+  if (profilesResult.error) {
+    throw new Error(profilesResult.error.message);
+  }
+
+  // Step 3: Build ranking entries from the bounded result sets.
   const rankingMap = new Map<string, RankingEntry>();
 
   for (const profile of profilesResult.data ?? []) {
-    rankingMap.set(profile.id, createEmptyEntry(profile));
+    const levelInfo = getLevelFromPoints(profile.points ?? 0);
+    rankingMap.set(profile.id, {
+      authorId: profile.id,
+      username: profile.username,
+      displayName: profile.display_name,
+      badge: profile.badge,
+      title: profile.title,
+      bio: profile.bio,
+      isPremium: profile.is_premium,
+      level: levelInfo.level,
+      levelTitle: levelInfo.title,
+      levelColor: levelInfo.color,
+      totalReactions: 0,
+      voicePosts: 0,
+      clap: 0,
+      laugh: 0,
+      replay: 0,
+      originalPosts: 0,
+      highPosts: 0,
+      lowPosts: 0,
+      robotPosts: 0,
+      telephonePosts: 0
+    });
   }
 
   const postToAuthorMap = new Map<string, string>();
 
-  for (const post of voicePosts) {
+  for (const post of postsResult.data ?? []) {
     postToAuthorMap.set(post.id, post.author_id);
     const current = rankingMap.get(post.author_id);
 
@@ -163,8 +215,9 @@ export async function getVoiceRankings() {
     }
   }
 
-  for (const reaction of reactionRows) {
-    const authorId = postToAuthorMap.get(reaction.voice_post_id);
+  for (const reaction of reactionsResult.data ?? []) {
+    const nested = reaction.voice_posts as unknown as { author_id: string } | null;
+    const authorId = nested?.author_id ?? postToAuthorMap.get(reaction.voice_post_id);
 
     if (!authorId) {
       continue;
@@ -177,12 +230,17 @@ export async function getVoiceRankings() {
     }
 
     current.totalReactions += 1;
-    current[reaction.sound_type] += 1;
+    const soundType = reaction.sound_type as "clap" | "laugh" | "replay";
+    current[soundType] += 1;
   }
 
   const allEntries = Array.from(rankingMap.values()).filter((entry) => entry.voicePosts > 0);
 
-  const boards: RankingBoard[] = [
+  return buildBoards(allEntries);
+}
+
+function buildBoards(allEntries: RankingEntry[]): RankingBoard[] {
+  return [
     {
       id: "overall",
       title: "総合ランキング",
@@ -220,6 +278,4 @@ export async function getVoiceRankings() {
       entries: sortForBoard("sexy-voice", allEntries)
     }
   ];
-
-  return boards;
 }

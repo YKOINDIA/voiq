@@ -33,6 +33,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <h1>Voiq 管理画面</h1>
         <p>全体の数字、主要クリエイター、最新の質問と回答をここで確認できます。</p>
         <div className="auth-links">
+          <Link className="secondary-button" href="/admin/users">
+            ユーザー管理
+          </Link>
+          <Link className="secondary-button" href="/admin/feedback">
+            フィードバック管理
+          </Link>
           <Link className="secondary-button" href="/dashboard">
             ダッシュボードへ戻る
           </Link>

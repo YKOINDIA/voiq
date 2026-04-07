@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AskShareButton } from "@/components/ask-share-button";
 import { FollowButton } from "@/components/follow-button";
 import { ReactionBar } from "@/components/reaction-bar";
+import { getBadgesForUser } from "@/lib/badges";
 import { getFollowStats, isFollowingProfile } from "@/lib/follows";
 import { submitQuestion } from "@/app/ask/[username]/actions";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
@@ -10,6 +11,8 @@ import { getProfileByUsername } from "@/lib/questions";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getPublicVoicePostsForAuthor } from "@/lib/voice-posts";
+
+export const revalidate = 120;
 
 type AskPageProps = {
   params: Promise<{
@@ -74,12 +77,13 @@ export default async function AskPage({ params, searchParams }: AskPageProps) {
     const {
       data: { session }
     } = await supabase.auth.getSession();
-    const [voicePosts, creatorStats, followsYou] = await Promise.all([
+    const [voicePosts, creatorStats, followsYou, userBadges] = await Promise.all([
       getPublicVoicePostsForAuthor(profile.id),
       getFollowStats(profile.id),
       session?.user.id && session.user.id !== profile.id
         ? isFollowingProfile(session.user.id, profile.id)
-        : Promise.resolve(false)
+        : Promise.resolve(false),
+      getBadgesForUser(profile.id)
     ]);
     const creatorIdentity = buildCreatorIdentity(profile, voicePosts);
 
@@ -93,11 +97,24 @@ export default async function AskPage({ params, searchParams }: AskPageProps) {
             回答は Voiq 上で音声として公開されます。
           </p>
           <div className="profile-meta">
+            <span className="level-badge" style={{ backgroundColor: creatorIdentity.levelColor }}>
+              Lv.{creatorIdentity.level} {creatorIdentity.title}
+            </span>
             <span>{creatorIdentity.badge}</span>
-            <span>{creatorIdentity.title}</span>
             <span>回答 {creatorIdentity.totalPosts}</span>
             <span>フォロワー {creatorStats.followers}</span>
           </div>
+          {userBadges.length > 0 ? (
+            <div className="badge-list">
+              <div className="badge-grid">
+                {userBadges.map((b) => (
+                  <span key={b.id} className="badge-chip" title={b.description}>
+                    {b.icon} {b.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="auth-links">
             {session?.user.id && session.user.id !== profile.id ? (
               <FollowButton username={username} isFollowing={followsYou} />

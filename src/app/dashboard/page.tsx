@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { signOut } from "@/app/sign-in/actions";
 import { AskShareButton } from "@/components/ask-share-button";
+import { DashboardTabs } from "@/components/dashboard-tabs";
 import { OnboardingBanner } from "@/components/onboarding-banner";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
-import { getAdminEmails } from "@/lib/env";
+import { getBadgesForUser } from "@/lib/badges";
 import { getFollowStats } from "@/lib/follows";
+import { getLevelProgress, getAllLevels } from "@/lib/points";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
@@ -12,230 +13,344 @@ import { getVoiceCategoryLabel } from "@/lib/voice-categories";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
-const dashboardCards = [
-  {
-    title: "質問を集める",
-    body: "公開リンクをシェアして、匿名の質問を気軽に集められます。"
-  },
-  {
-    title: "声で返す",
-    body: "Free は 10 秒、Premium は 60 秒まで。匿名ボイスに変えて答えることもできます。"
-  },
-  {
-    title: "反応が返る",
-    body: "拍手、笑い声、もう一回のリアクションで聞き専の反応がたまっていきます。"
-  }
-];
+type DashboardPageProps = {
+  searchParams?: Promise<{ tab?: string }>;
+};
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const sp = (await searchParams) ?? {};
+  const tab = sp.tab ?? "content";
+
   const { session, profile } = await getOrCreateProfileForCurrentUser();
-  const email = session.user.email ?? "unknown";
-  const isAdmin = getAdminEmails().includes(email.toLowerCase());
-  const [questions, voicePosts, followStats] = await Promise.all([
+  const [questions, voicePosts, followStats, userBadges] = await Promise.all([
     getQuestionsForRecipient(session.user.id),
     getVoicePostsForAuthor(session.user.id),
-    getFollowStats(session.user.id)
+    getFollowStats(session.user.id),
+    getBadgesForUser(session.user.id)
   ]);
   const creatorIdentity = buildCreatorIdentity(profile, voicePosts);
+  const levelProgress = getLevelProgress(profile.points ?? 0);
+  const unansweredQuestions = questions.filter((q) => !q.answered_at);
   const askUrl =
     profile.username != null ? `${process.env.NEXT_PUBLIC_SITE_URL}/ask/${profile.username}` : null;
-  const unansweredQuestions = questions.filter((question) => !question.answered_at);
-  const answeredQuestions = questions.filter((question) => Boolean(question.answered_at));
 
   return (
     <main className="dashboard-shell">
-      <section className="dashboard-hero">
-        <span className="section-label">Creator Dashboard</span>
-        <h1>質問を集めて、声で返す。</h1>
-        <p>
-          <strong>{email}</strong> でログイン中。プロフィール、質問への音声回答、シェア導線をここから回せます。
-        </p>
-      </section>
-
-      {voicePosts.length === 0 ? <OnboardingBanner targetId="standalone-composer" /> : null}
-
-      <section className="profile-summary">
-        <article className="profile-card">
-          <span className="section-label">Your Profile</span>
-          <h2>{profile.display_name ?? profile.username ?? "Voiq user"}</h2>
-          <p>@{profile.username ?? "username"}</p>
-          <p>
-            {profile.bio ??
-              "まだ自己紹介が入っていません。声の特徴や好きなジャンルを書いておくと質問が集まりやすくなります。"}
-          </p>
-          <div className="profile-meta">
-            <span>{profile.is_premium ? "Premium" : "Free"}</span>
-            <span>{creatorIdentity.badge}</span>
-            <span>{creatorIdentity.title}</span>
-            <span>リアクション {creatorIdentity.totalReactions}</span>
-            <span>フォロワー {followStats.followers}</span>
-            <span>フォロー中 {followStats.following}</span>
+      {/* プロフィールサマリ */}
+      <section className="dash-profile-bar">
+        <div className="dash-profile-bar__left">
+          <div className="dash-profile-avatar">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt="" />
+            ) : (
+              <span>{(profile.display_name ?? "V").charAt(0).toUpperCase()}</span>
+            )}
           </div>
-          {askUrl && profile.username ? (
-            <div className="profile-link-block">
-              <strong>質問募集リンク</strong>
-              <p>{askUrl}</p>
-              <AskShareButton
-                username={profile.username}
-                displayName={profile.display_name ?? profile.username}
-                askUrl={askUrl}
+          <div>
+            <h1 className="dash-profile-name">{profile.display_name ?? profile.username ?? "Voiq user"}</h1>
+            <p className="dash-profile-sub">@{profile.username ?? "username"}</p>
+          </div>
+        </div>
+        <div className="dash-profile-bar__right">
+          <div className="level-bar-section">
+            <div className="level-bar-header">
+              <span className="level-badge" style={{ backgroundColor: levelProgress.current.color }}>
+                Lv.{levelProgress.current.level} {levelProgress.current.title}
+              </span>
+              <span className="level-points">{profile.points ?? 0} pt</span>
+            </div>
+            <div className="level-bar-track">
+              <div
+                className="level-bar-fill"
+                style={{
+                  width: `${Math.round(levelProgress.progress * 100)}%`,
+                  backgroundColor: levelProgress.current.color
+                }}
               />
             </div>
-          ) : null}
-          <div className="auth-links">
-            <Link className="secondary-button" href="/settings/profile">
-              プロフィールを編集
-            </Link>
-            {profile.username ? (
-              <Link className="secondary-button" href={`/ask/${profile.username}`}>
-                公開ページを見る
-              </Link>
-            ) : null}
-            <Link className="secondary-button" href="/rankings">
-              ランキングを見る
-            </Link>
-            {isAdmin ? (
-              <Link className="secondary-button" href="/admin">
-                管理画面
-              </Link>
-            ) : null}
-            <form action={signOut}>
-              <button className="secondary-button" type="submit">
-                ログアウト
-              </button>
-            </form>
+            {levelProgress.next ? (
+              <p className="level-bar-hint">
+                次「{levelProgress.next.title}」まで {levelProgress.next.points - (profile.points ?? 0)} pt
+              </p>
+            ) : (
+              <p className="level-bar-hint">最高レベル到達</p>
+            )}
           </div>
-        </article>
+        </div>
       </section>
 
-      <section className="question-section">
-        <article className="profile-card">
-          <span className="section-label">Inbox</span>
-          <h2>届いている質問</h2>
-          {questions.length === 0 ? (
-            <p>まだ質問はありません。公開ページや質問募集リンクをシェアしてみましょう。</p>
+      {/* オンボーディングバナー（初回ユーザー向け） */}
+      {voicePosts.length === 0 ? <OnboardingBanner targetId="standalone-composer" /> : null}
+
+      {/* タブ */}
+      <DashboardTabs active={tab} />
+
+      {/* コンテンツタブ */}
+      {tab === "content" ? (
+        <>
+          {/* 受信質問 */}
+          <section className="question-section">
+            <article className="profile-card">
+              <h2>受信した質問 ({questions.length}件)</h2>
+              {unansweredQuestions.length > 0 ? (
+                <p className="notice notice--success">{unansweredQuestions.length}件の未回答があります</p>
+              ) : (
+                <p>すべて回答済みです。</p>
+              )}
+              {askUrl && profile.username ? (
+                <div className="profile-link-block">
+                  <strong>質問募集リンク</strong>
+                  <p>{askUrl}</p>
+                  <AskShareButton
+                    username={profile.username}
+                    displayName={profile.display_name ?? profile.username}
+                    askUrl={askUrl}
+                  />
+                </div>
+              ) : null}
+              <div className="question-list">
+                {unansweredQuestions.map((q) => (
+                  <article key={q.id} className="question-item">
+                    <p>{q.content}</p>
+                    <div className="question-meta">
+                      <span>{q.is_anonymous ? "匿名" : q.sender_name ?? "名無し"}</span>
+                      <span>{new Date(q.created_at).toLocaleString("ja-JP")}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          {/* 自分のボイスコンテンツ */}
+          <section className="question-section">
+            <article className="profile-card">
+              <h2>あなたのボイス ({voicePosts.length}件)</h2>
+              {voicePosts.length === 0 ? (
+                <p>まだボイスがありません。「録音」タブから最初のボイスを投稿しましょう。</p>
+              ) : (
+                <div className="question-list">
+                  {voicePosts.map((post) => (
+                    <article key={post.id} className="question-item">
+                      {post.question_content ? <p>Q. {post.question_content}</p> : null}
+                      <div className="question-meta">
+                        {getVoiceCategoryLabel(post.category) ? (
+                          <span>{getVoiceCategoryLabel(post.category)}</span>
+                        ) : null}
+                        <span>{getVoiceModeLabel(post.voice_mode)}</span>
+                        <span>{post.duration_seconds}秒</span>
+                        <span>{post.expires_at ? "24hで消える" : "保存済み"}</span>
+                        <span>{new Date(post.created_at).toLocaleString("ja-JP")}</span>
+                      </div>
+                      {post.audio_url ? <audio controls src={post.audio_url} className="audio-preview" /> : null}
+                      {post.reactions ? (
+                        <div className="reaction-inline">
+                          <span>拍手 {post.reactions.clap}</span>
+                          <span>笑い声 {post.reactions.laugh}</span>
+                          <span>もう一回 {post.reactions.replay}</span>
+                        </div>
+                      ) : null}
+                      <div className="auth-links">
+                        {post.share_url ? (
+                          <Link className="secondary-button" href={post.share_url}>シェア</Link>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </article>
+          </section>
+        </>
+      ) : null}
+
+      {/* 録音タブ */}
+      {tab === "record" ? (
+        <>
+          {/* 単独投稿（質問なし・カテゴリ付き） */}
+          <section className="question-section">
+            <VoiceReplyComposer
+              mode="standalone"
+              defaultCategory="intro"
+              maxDurationSeconds={profile.is_premium ? 60 : 10}
+              isPremium={profile.is_premium}
+              anchorId="standalone-composer"
+            />
+          </section>
+
+          {/* 質問への返信 */}
+          {unansweredQuestions.length > 0 ? (
+            <section className="question-section">
+              <VoiceReplyComposer
+                mode="reply"
+                questions={unansweredQuestions.map((q) => ({
+                  id: q.id,
+                  content: q.content,
+                  is_anonymous: q.is_anonymous,
+                  sender_name: q.sender_name
+                }))}
+                maxDurationSeconds={profile.is_premium ? 60 : 10}
+                isPremium={profile.is_premium}
+              />
+            </section>
           ) : (
-            <div className="question-list">
-              <article className="question-item">
-                <strong>未回答 {unansweredQuestions.length}</strong>
-                {unansweredQuestions.length === 0 ? (
-                  <p>未回答の質問はありません。</p>
-                ) : (
-                  <div className="question-list nested-question-list">
-                    {unansweredQuestions.map((question) => (
-                      <article key={question.id} className="question-item">
-                        <p>{question.content}</p>
-                        <div className="question-meta">
-                          <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
-                          <span>{new Date(question.created_at).toLocaleString("ja-JP")}</span>
-                        </div>
-                      </article>
-                    ))}
+            <section className="question-section">
+              <article className="profile-card">
+                <h2>回答待ちの質問がありません</h2>
+                <p>質問募集リンクをシェアして、質問を集めましょう。</p>
+                {askUrl && profile.username ? (
+                  <div className="profile-link-block">
+                    <strong>質問募集リンク</strong>
+                    <p>{askUrl}</p>
+                    <AskShareButton
+                      username={profile.username}
+                      displayName={profile.display_name ?? profile.username}
+                      askUrl={askUrl}
+                    />
                   </div>
-                )}
+                ) : null}
               </article>
-
-              <article className="question-item">
-                <strong>回答済み {answeredQuestions.length}</strong>
-                {answeredQuestions.length === 0 ? (
-                  <p>まだ回答済みの質問はありません。</p>
-                ) : (
-                  <div className="question-list nested-question-list">
-                    {answeredQuestions.map((question) => (
-                      <article key={question.id} className="question-item">
-                        <p>{question.content}</p>
-                        <div className="question-meta">
-                          <span>{question.is_anonymous ? "匿名" : question.sender_name ?? "名無し"}</span>
-                          <span>
-                            {new Date(question.answered_at ?? question.created_at).toLocaleString("ja-JP")}
-                          </span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </article>
-            </div>
+            </section>
           )}
-        </article>
-      </section>
+        </>
+      ) : null}
 
-      {unansweredQuestions.length > 0 ? (
+      {/* アナリティクスタブ */}
+      {tab === "analytics" ? (
         <section className="question-section">
-          <VoiceReplyComposer
-            mode="reply"
-            questions={unansweredQuestions.map((question) => ({
-              id: question.id,
-              content: question.content,
-              is_anonymous: question.is_anonymous,
-              sender_name: question.sender_name
-            }))}
-            maxDurationSeconds={profile.is_premium ? 60 : 10}
-            isPremium={profile.is_premium}
-          />
+          <article className="profile-card">
+            <h2>Voice アナリティクス</h2>
+            <div className="analytics-grid">
+              <div className="analytics-card">
+                <span className="analytics-value">{voicePosts.length}</span>
+                <span className="analytics-label">投稿数</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{creatorIdentity.totalReactions}</span>
+                <span className="analytics-label">総リアクション</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{followStats.followers}</span>
+                <span className="analytics-label">フォロワー</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{followStats.following}</span>
+                <span className="analytics-label">フォロー中</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{questions.length}</span>
+                <span className="analytics-label">受信した質問</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{userBadges.length}</span>
+                <span className="analytics-label">獲得バッジ</span>
+              </div>
+            </div>
+          </article>
+
+          {/* バッジ一覧 */}
+          <article className="profile-card">
+            <h2>獲得バッジ</h2>
+            {userBadges.length === 0 ? (
+              <p>まだバッジを獲得していません。ボイスを投稿してバッジを集めましょう。</p>
+            ) : (
+              <div className="badge-grid">
+                {userBadges.map((b) => (
+                  <span key={b.id} className="badge-chip" title={b.description}>
+                    {b.icon} {b.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </article>
+
+          {/* レベル一覧 */}
+          <article className="profile-card">
+            <h2>レベル一覧</h2>
+            <p>ボイスの投稿やリアクションでポイントが貯まり、レベルが上がります。</p>
+            <div className="level-table">
+              {getAllLevels().map((lv) => (
+                <div
+                  key={lv.level}
+                  className={`level-row ${(profile.points ?? 0) >= lv.points ? "level-row--reached" : ""}`}
+                >
+                  <span className="level-badge" style={{ backgroundColor: lv.color }}>
+                    Lv.{lv.level}
+                  </span>
+                  <div className="level-row__info">
+                    <strong>{lv.title}</strong>
+                    <span>{lv.description}</span>
+                  </div>
+                  <span className="level-row__pts">{lv.points} pt</span>
+                </div>
+              ))}
+            </div>
+          </article>
         </section>
       ) : null}
 
-      <section className="question-section">
-        <VoiceReplyComposer
-          mode="standalone"
-          defaultCategory="intro"
-          maxDurationSeconds={profile.is_premium ? 60 : 10}
-          isPremium={profile.is_premium}
-          anchorId="standalone-composer"
-        />
-      </section>
-
-      <section className="question-section">
-        <article className="profile-card">
-          <span className="section-label">Recent Answers</span>
-          <h2>投稿した音声</h2>
-          {voicePosts.length === 0 ? (
-            <p>まだ音声回答はありません。まずはひとつ録音して投稿してみましょう。</p>
-          ) : (
-            <div className="question-list">
-              {voicePosts.map((post) => (
-                <article key={post.id} className="question-item">
-                  {post.question_content ? <p>Q. {post.question_content}</p> : null}
-                  <div className="question-meta">
-                    {getVoiceCategoryLabel(post.category) ? (
-                      <span>{getVoiceCategoryLabel(post.category)}</span>
-                    ) : null}
-                    <span>{getVoiceModeLabel(post.voice_mode)}</span>
-                    <span>{post.duration_seconds}秒</span>
-                    <span>{post.expires_at ? "24時間で消える" : "無期限保存"}</span>
-                    <span>{new Date(post.created_at).toLocaleString("ja-JP")}</span>
-                  </div>
-                  {post.audio_url ? <audio controls src={post.audio_url} className="audio-preview" /> : null}
-                  <div className="auth-links">
-                    {post.share_url ? (
-                      <Link className="secondary-button" href={post.share_url}>
-                        波形シェアを見る
-                      </Link>
-                    ) : null}
-                  </div>
-                  {post.reactions ? (
-                    <div className="reaction-inline">
-                      <span>拍手 {post.reactions.clap}</span>
-                      <span>笑い声 {post.reactions.laugh}</span>
-                      <span>もう一回 {post.reactions.replay}</span>
+      {/* 字幕タブ */}
+      {tab === "subtitles" ? (
+        <section className="question-section">
+          <article className="profile-card">
+            <h2>Voice 字幕</h2>
+            <p>投稿した音声の自動文字起こしを確認・編集できます。</p>
+            {voicePosts.length === 0 ? (
+              <p>まだボイスがありません。</p>
+            ) : (
+              <div className="question-list">
+                {voicePosts.map((post) => (
+                  <article key={post.id} className="question-item">
+                    {post.question_content ? <p className="subtitle-question">Q. {post.question_content}</p> : null}
+                    <div className="question-meta">
+                      <span>{getVoiceModeLabel(post.voice_mode)}</span>
+                      <span>{post.duration_seconds}秒</span>
                     </div>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          )}
-        </article>
-      </section>
-
-      <section className="dashboard-grid">
-        {dashboardCards.map((card) => (
-          <article key={card.title} className="dashboard-card">
-            <h2>{card.title}</h2>
-            <p>{card.body}</p>
+                    <p className="subtitle-text">
+                      {post.transcript ?? "字幕はまだ生成されていません（今後対応予定）"}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
           </article>
-        ))}
-      </section>
+        </section>
+      ) : null}
+
+      {/* 収入タブ */}
+      {tab === "earn" ? (
+        <section className="question-section">
+          <article className="profile-card">
+            <h2>収入</h2>
+            <p>
+              Voiq ではリアクションやフォロワー数に応じた収益化プログラムを準備中です。
+              現在はポイントとバッジで実績を可視化しています。
+            </p>
+            <div className="analytics-grid">
+              <div className="analytics-card">
+                <span className="analytics-value">{profile.points ?? 0}</span>
+                <span className="analytics-label">累計ポイント</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{creatorIdentity.totalReactions}</span>
+                <span className="analytics-label">総リアクション</span>
+              </div>
+              <div className="analytics-card">
+                <span className="analytics-value">{profile.is_premium ? "Premium" : "Free"}</span>
+                <span className="analytics-label">プラン</span>
+              </div>
+            </div>
+            <div className="earn-notice">
+              <h3>収益化プログラム（Coming Soon）</h3>
+              <ul>
+                <li>リアクション数に応じた報酬</li>
+                <li>Premium リスナーからの投げ銭</li>
+                <li>ランキング入賞ボーナス</li>
+              </ul>
+            </div>
+          </article>
+        </section>
+      ) : null}
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppHeader } from "@/components/app-header";
+import { FeedbackFab } from "@/components/feedback-fab";
 import { getAdminEmails } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import "./globals.css";
@@ -45,11 +46,30 @@ export default async function RootLayout({
   const email = session?.user.email?.toLowerCase() ?? "";
   const isAdmin = getAdminEmails().includes(email);
 
+  let avatarUrl: string | null = null;
+  let displayName: string | null = null;
+
+  if (session) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("avatar_url, display_name")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    avatarUrl = profile?.avatar_url ?? null;
+    displayName = profile?.display_name ?? null;
+  }
+
   return (
     <html lang="ja">
       <body>
-        <AppHeader isSignedIn={Boolean(session)} isAdmin={isAdmin} />
+        <AppHeader
+          isSignedIn={Boolean(session)}
+          isAdmin={isAdmin}
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+        />
         {children}
+        {session ? <FeedbackFab userId={session.user.id} /> : null}
       </body>
     </html>
   );
