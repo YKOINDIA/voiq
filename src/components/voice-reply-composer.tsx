@@ -150,7 +150,23 @@ export function VoiceReplyComposer({
       chunksRef.current = [];
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const recorder = new MediaRecorder(stream);
+
+      // ブラウザがサポートするMIMEタイプを選択 (iOS Safariはwebm非対応)
+      const candidateTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4;codecs=mp4a.40.2",
+        "audio/mp4",
+        "audio/aac"
+      ];
+      const supportedType =
+        typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function"
+          ? candidateTypes.find((t) => MediaRecorder.isTypeSupported(t))
+          : undefined;
+
+      const recorder = supportedType
+        ? new MediaRecorder(stream, { mimeType: supportedType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
@@ -160,7 +176,9 @@ export function VoiceReplyComposer({
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        // recorder.mimeTypeを使う(指定されなかった場合はブラウザのデフォルト)
+        const blobType = recorder.mimeType || supportedType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type: blobType });
         setSourceBlob(blob);
         setIsRecording(false);
         resetTimer();
@@ -209,7 +227,14 @@ export function VoiceReplyComposer({
     setIsSubmitting(true);
     setStatus("");
 
-    const extension = processedBlob.type === "audio/wav" ? "wav" : "webm";
+    const blobType = processedBlob.type;
+    const extension = blobType.includes("wav")
+      ? "wav"
+      : blobType.includes("mp4") || blobType.includes("aac")
+        ? "m4a"
+        : blobType.includes("mpeg")
+          ? "mp3"
+          : "webm";
     const formData = new FormData();
     formData.append("audio", processedBlob, `reply.${extension}`);
     if (!isStandalone) {
