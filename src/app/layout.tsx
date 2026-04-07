@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppHeader } from "@/components/app-header";
+import { FeedbackFab } from "@/components/feedback-fab";
 import { getAdminEmails } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import "./globals.css";
@@ -65,6 +66,7 @@ export default async function RootLayout({
           displayName={displayName}
         />
         {children}
+        {session ? <FeedbackFab userId={session.user.id} /> : null}
       </body>
     </html>
   );
