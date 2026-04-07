@@ -36,6 +36,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <Link className="secondary-button" href="/admin/users">
             ユーザー管理
           </Link>
+          <Link className="secondary-button" href="/admin/feedback">
+            フィードバック管理
+          </Link>
           <Link className="secondary-button" href="/dashboard">
             ダッシュボードへ戻る
           </Link>
