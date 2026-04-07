@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AskShareButton } from "@/components/ask-share-button";
 import { FollowButton } from "@/components/follow-button";
 import { ReactionBar } from "@/components/reaction-bar";
 import { getBadgesForUser } from "@/lib/badges";
@@ -21,6 +23,46 @@ type AskPageProps = {
     success?: string;
   }>;
 };
+
+export async function generateMetadata({ params }: AskPageProps): Promise<Metadata> {
+  const { username } = await params;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const ogImage = `${siteUrl}/api/og/ask/${username}`;
+  const askUrl = `${siteUrl}/ask/${username}`;
+
+  let title = `@${username} に声で質問する | Voiq`;
+  let description = "Voiq の声で答える質問箱。10秒のひとことボイスで返事が届きます。";
+
+  try {
+    const profile = await getProfileByUsername(username);
+    const name = profile.display_name ?? `@${profile.username ?? username}`;
+    title = `${name} に声で質問する | Voiq`;
+    if (profile.bio) {
+      description = profile.bio;
+    }
+  } catch {
+    // フォールバックメタを使う
+  }
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: askUrl,
+      siteName: "Voiq",
+      images: [{ url: ogImage, width: 1200, height: 630 }],
+      type: "website"
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage]
+    }
+  };
+}
 
 export default async function AskPage({ params, searchParams }: AskPageProps) {
   const [{ username }, resolvedSearchParams] = await Promise.all([
@@ -77,6 +119,11 @@ export default async function AskPage({ params, searchParams }: AskPageProps) {
             {session?.user.id && session.user.id !== profile.id ? (
               <FollowButton username={username} isFollowing={followsYou} />
             ) : null}
+            <AskShareButton
+              username={username}
+              displayName={profile.display_name ?? `@${profile.username ?? username}`}
+              askUrl={`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/ask/${username}`}
+            />
           </div>
 
           <form className="auth-placeholder" action={submitQuestion.bind(null, username)}>

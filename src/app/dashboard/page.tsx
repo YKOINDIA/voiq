@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { AskShareButton } from "@/components/ask-share-button";
 import { DashboardTabs } from "@/components/dashboard-tabs";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 import { VoiceReplyComposer } from "@/components/voice-reply-composer";
 import { getBadgesForUser } from "@/lib/badges";
 import { getFollowStats } from "@/lib/follows";
@@ -7,6 +9,7 @@ import { getLevelProgress, getAllLevels } from "@/lib/points";
 import { buildCreatorIdentity } from "@/lib/profile-insights";
 import { getQuestionsForRecipient } from "@/lib/questions";
 import { getOrCreateProfileForCurrentUser } from "@/lib/profiles-server";
+import { getVoiceCategoryLabel } from "@/lib/voice-categories";
 import { getVoiceModeLabel } from "@/lib/voice-modes";
 import { getVoicePostsForAuthor } from "@/lib/voice-posts";
 
@@ -76,6 +79,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       </section>
 
+      {/* オンボーディングバナー（初回ユーザー向け） */}
+      {voicePosts.length === 0 ? <OnboardingBanner targetId="standalone-composer" /> : null}
+
       {/* タブ */}
       <DashboardTabs active={tab} />
 
@@ -91,10 +97,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <p>すべて回答済みです。</p>
               )}
-              {askUrl ? (
+              {askUrl && profile.username ? (
                 <div className="profile-link-block">
                   <strong>質問募集リンク</strong>
                   <p>{askUrl}</p>
+                  <AskShareButton
+                    username={profile.username}
+                    displayName={profile.display_name ?? profile.username}
+                    askUrl={askUrl}
+                  />
                 </div>
               ) : null}
               <div className="question-list">
@@ -123,6 +134,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <article key={post.id} className="question-item">
                       {post.question_content ? <p>Q. {post.question_content}</p> : null}
                       <div className="question-meta">
+                        {getVoiceCategoryLabel(post.category) ? (
+                          <span>{getVoiceCategoryLabel(post.category)}</span>
+                        ) : null}
                         <span>{getVoiceModeLabel(post.voice_mode)}</span>
                         <span>{post.duration_seconds}秒</span>
                         <span>{post.expires_at ? "24hで消える" : "保存済み"}</span>
@@ -152,31 +166,53 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       {/* 録音タブ */}
       {tab === "record" ? (
-        <section className="question-section">
-          {unansweredQuestions.length > 0 ? (
+        <>
+          {/* 単独投稿（質問なし・カテゴリ付き） */}
+          <section className="question-section">
             <VoiceReplyComposer
-              questions={unansweredQuestions.map((q) => ({
-                id: q.id,
-                content: q.content,
-                is_anonymous: q.is_anonymous,
-                sender_name: q.sender_name
-              }))}
+              mode="standalone"
+              defaultCategory="intro"
               maxDurationSeconds={profile.is_premium ? 60 : 10}
               isPremium={profile.is_premium}
+              anchorId="standalone-composer"
             />
+          </section>
+
+          {/* 質問への返信 */}
+          {unansweredQuestions.length > 0 ? (
+            <section className="question-section">
+              <VoiceReplyComposer
+                mode="reply"
+                questions={unansweredQuestions.map((q) => ({
+                  id: q.id,
+                  content: q.content,
+                  is_anonymous: q.is_anonymous,
+                  sender_name: q.sender_name
+                }))}
+                maxDurationSeconds={profile.is_premium ? 60 : 10}
+                isPremium={profile.is_premium}
+              />
+            </section>
           ) : (
-            <article className="profile-card">
-              <h2>回答待ちの質問がありません</h2>
-              <p>質問募集リンクをシェアして、質問を集めましょう。</p>
-              {askUrl ? (
-                <div className="profile-link-block">
-                  <strong>質問募集リンク</strong>
-                  <p>{askUrl}</p>
-                </div>
-              ) : null}
-            </article>
+            <section className="question-section">
+              <article className="profile-card">
+                <h2>回答待ちの質問がありません</h2>
+                <p>質問募集リンクをシェアして、質問を集めましょう。</p>
+                {askUrl && profile.username ? (
+                  <div className="profile-link-block">
+                    <strong>質問募集リンク</strong>
+                    <p>{askUrl}</p>
+                    <AskShareButton
+                      username={profile.username}
+                      displayName={profile.display_name ?? profile.username}
+                      askUrl={askUrl}
+                    />
+                  </div>
+                ) : null}
+              </article>
+            </section>
           )}
-        </section>
+        </>
       ) : null}
 
       {/* アナリティクスタブ */}

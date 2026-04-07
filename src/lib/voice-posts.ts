@@ -8,6 +8,7 @@ export type VoicePost = {
   storage_path: string;
   duration_seconds: number;
   voice_mode: string;
+  category: string | null;
   transcript: string | null;
   share_video_path: string | null;
   expires_at: string | null;
